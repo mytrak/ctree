@@ -1,0 +1,105 @@
+# Default ctree configuration shipped with the package.
+#
+# Override per-repo by creating <source_root>/.ctree/config.yml with the same
+# schema. Keys present in the user file replace the defaults below; absent
+# keys fall back to these values.
+
+# Name of the env file ctree reads and writes in both the source repo and
+# each worktree (e.g. COMPOSE_PROJECT_NAME, HOST_NAME, and any prompted
+# variables). Change this if a project uses a non-standard env file name.
+env_filename: .env
+
+# The suffix part of Docker volume names to share between source and worktree.
+# Suffix = everything after the leading `<project>_` in the full volume name.
+# Example: full name `myapp_node_modules` → suffix is `node_modules`.
+# ctree rewrites the worktree's compose_override_file to mount the source
+# project's volume directly (external: true) rather than creating a new one.
+share_volumes: []
+
+# The suffix part of Docker volume names that `ctree update` is allowed to
+# rsync from source into the worktree. Suffix = everything after `<project>_`.
+# Example: full name `myapp_bundler` → suffix is `bundler`.
+# This is an allowlist — volumes not listed are left untouched so new
+# stateful volumes fail closed rather than being silently overwritten.
+update_volumes: []
+
+# Volume name suffixes that ctree creates empty in the worktree rather than
+# copying from source. Use for transient volumes (e.g. logs, tmp) whose
+# content is not meaningful to a fresh branch environment.
+# Suffix = everything after the leading `<project>_`.
+# During ctree create: volume is created with no data (rsync skipped).
+# During ctree update: volume is skipped regardless of update_volumes.
+empty_volumes: []
+
+# Variables in the source .env that are auto-set during `ctree create` and
+# NOT presented as interactive prompts. COMPOSE_PROJECT_NAME is always
+# excluded (it is set to the target project name) regardless of this list.
+skip_env_keys: []
+
+# The .env variable that ctree sets to the worktree name so the worktree
+# can be accessed via its own domain (e.g. worktree-abc.docker). ctree sets
+# this automatically — the user is never prompted for it.
+host_name: HOST_NAME
+
+# The TLD written to HOST_NAME_SUFFIX in the worktree .env. When non-empty,
+# ctree writes HOST_NAME_SUFFIX=<value> so compose files can construct
+# ${HOST_NAME}.${HOST_NAME_SUFFIX} for domain routing. Leave empty for
+# projects that don't use HOST_NAME_SUFFIX.
+host_name_suffix: ""
+
+# The .env variable that ctree sets to <HOST_NAME>.<HOST_NAME_SUFFIX> during
+# `ctree create`. Use when a project reads its full worktree domain from a
+# single .env variable (e.g. MYAPP_DOMAIN). ctree computes the value as
+# <worktree_name>.<host_name_suffix> and writes it automatically — no prompt.
+# If this key also appears in skip_env_keys it is ignored there; this setting
+# takes precedence. Leave empty if the project does not use such a variable.
+host_domain_env_key: ""
+
+# Directories (relative to repo root) scanned one level deep for embedded
+# git repos during `ctree rebase`. Each subdirectory that has a .git entry
+# and is NOT listed in .gitmodules is treated as an independent embedded repo
+# and rebased from its source counterpart (local-only, no network).
+# Example: [gems/plugins] will rebase all embedded repos in the worktree's
+# gems/plugins directory from <source_root>/gems/plugins/*.
+rebase: []
+
+# The docker-compose override file that ctree automatically rewrites during
+# `ctree create` to mark shared volumes as external references to the source
+# project's volumes.
+compose_override_file: docker-compose.local.ctree.yml
+
+# Top-level names (files or directories) to skip when cloning the source
+# working tree into a new worktree during `ctree create`. Matched by
+# basename — top-level items only.
+# Examples: node_modules (directory), .env.local (file)
+exclude: []
+
+# Repo-relative files or directories copied from source to worktree during
+# `ctree update` and `ctree create`. Use for gitignored artifacts that
+# describe the state of shared Docker volumes (e.g. Gemfile.*.plugins.lock
+# next to gem volumes). These are not updated by `git rebase` since they are
+# gitignored, but must match the source after a volume sync for
+# gems/packages to resolve. Files are copied directly; directories are
+# synced recursively (additions, modifications, and deletions).
+# Example: [Gemfile.rails8.plugins.lock]
+update: []
+
+# Shell commands run automatically after `ctree update` completes, regardless
+# of whether any volume syncs failed. Commands execute in order from the
+# worktree root; execution stops on the first non-zero exit.
+# Example:
+#   post_update_hooks:
+#     - docker compose run --rm web bundle exec rake db:migrate RAILS_ENV=development
+post_update_hooks: []
+
+# Branch name prefix used by `ctree list` to detect free (placeholder) worktrees.
+# Any worktree whose checked-out branch starts with this prefix is treated as a
+# placeholder and shown with a "(free)" tag. `ctree list free` then limits output
+# to only those worktrees. Leave empty to disable the feature.
+# Default: "FREE-"
+free_branch_prefix: "FREE-"
+
+# Log verbosity during `ctree create`. 'info' shows one summary line per
+# phase (default). 'debug' shows every per-item action — useful when
+# diagnosing volume or file issues.
+log_level: info
