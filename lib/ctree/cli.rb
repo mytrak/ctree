@@ -4,24 +4,37 @@ module Ctree
   module CLI
     module_function
 
+    COMMANDS = [
+      ["create", "create a sibling worktree on a branch"],
+      ["delete", "remove a worktree and its Docker resources"],
+      ["list", "list worktrees for the current source repo"],
+      ["switch", "change directory into a worktree"],
+      ["rebase", "rebase the worktree onto the source repo's master"],
+      ["update", "sync images, volumes, and files from source"],
+      ["free", "reset the worktree to a free placeholder branch"],
+      ["env", "manage the worktree's .env against the source"],
+      ["version", "print the installed ctree version"],
+      ["domain", "configure local DNS resolution for a TLD (macOS only)"],
+      ["config", "manage the per-repo .ctree/config.yml"],
+      ["compose-config", "manage shared-volume references in the compose override"],
+      ["help", "show detailed help for a command"]
+    ].freeze
+
+    COMMAND_NAME_WIDTH = COMMANDS.map { |name, _| name.length }.max + 2
+
     USAGE = <<~USAGE
+      Replicate a Docker Compose dev tree as a sibling git worktree with its own branch, volumes, and .env.
+
       Usage:
-        ctree create <worktree_name> <branch_name>
-        ctree delete <worktree_name>
-        ctree list   [all | free | used]
-        ctree switch <worktree_name>
-        ctree rebase
-        ctree update
-        ctree free
-        ctree env    [list | check | fix]
-        ctree version
-        ctree domain [list | [add | delete] <tld>]
-        ctree config [list | add | delete]
-        ctree compose-config [list | check | fix]
-        ctree help <command>
+        ctree [command]
+
+      Available Commands:
+      #{COMMANDS.map { |name, desc| "  #{name.ljust(COMMAND_NAME_WIDTH)}#{desc}" }.join("\n")}
 
       Most commands run from the top of the source repository.
       `update`, `rebase`, `free`, `env`, and `compose-config` run from inside a worktree.
+
+      Use "ctree help <command>" for more information about a command.
     USAGE
 
     HELP = {
