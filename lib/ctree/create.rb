@@ -4,7 +4,7 @@ module Ctree
   module Create
     module_function
 
-    def run(name:, branch:)
+    def run(name:, branch:, config_path: nil)
       source_root = Pathname.pwd
       toplevel_out, _, status = Sh.capture3("git", "-C", source_root.to_s, "rev-parse", "--show-toplevel")
       Log.die "not inside a git repository" unless status.success?
@@ -72,7 +72,11 @@ module Ctree
         end
       end
 
-      config = Config.load(source_root)
+      config = if config_path
+           Config.load_with_override(config_path)
+         else
+           Config.load(source_root)
+         end
       Log.debug_mode = config[:log_level] == "debug"
       share_volumes = config[:share_volumes]
       empty_volumes = config[:empty_volumes]
@@ -275,6 +279,17 @@ module Ctree
         end
       else
         Log.warn_ "git reset HEAD returned non-zero; git status may show unexpected changes"
+      end
+
+      # When --config was given, persist the custom config into the worktree's
+      # .ctree/config.yml so later commands run from inside it pick it up.
+      # This must happen AFTER the git-sync step above, otherwise git checkout
+      # HEAD -- . would overwrite it with the committed version.
+      if config_path
+        ctree_dir = target_path / ".ctree"
+        FileUtils.mkdir_p(ctree_dir.to_s)
+        FileUtils.cp(File.expand_path(config_path, Dir.pwd), (ctree_dir / "config.yml").to_s)
+        Log.info "using custom config #{config_path} for this worktree (persisted to .ctree/config.yml)"
       end
 
       config[:update].each do |rel|

@@ -659,5 +659,42 @@ RSpec.describe "Ctree::CLI create" do
       system("git", "-C", @work.to_s, "worktree", "remove", "--force", (@work.parent / "wt1").to_s,
              out: File::NULL, err: File::NULL)
     end
+
+    it "accepts --config <path> and uses the custom config for the worktree" do
+      FileUtils.mkdir_p((@work / ".ctree").to_s)
+      File.write((@work / ".ctree" / "config.yml").to_s, "exclude: []\nupdate_volumes:\n  - something\n")
+      File.write((@work / ".gitignore").to_s, "node_modules/\n")
+      FileUtils.mkdir_p((@work / "node_modules").to_s)
+      File.write((@work / "node_modules" / "package.json").to_s, "{}")
+      system("git", "-C", @work.to_s, "add", ".ctree", ".gitignore", out: File::NULL, err: File::NULL)
+      system("git", "-C", @work.to_s, "commit", "-q", "--amend", "--no-edit",
+             out: File::NULL, err: File::NULL)
+
+      # Write a custom config that excludes node_modules
+      custom = @parent / "custom_config.yml"
+      File.write(custom.to_s, "exclude:\n  - node_modules\n")
+
+      allow(Ctree::Prompt).to receive(:for_env_var_change) { |_key, value| value }
+      allow(Ctree::Prompt).to receive(:read_line).and_return("n")
+      stub_clonefile
+      stub_sh(docker_capture3: docker_stubs)
+
+      expect {
+        Ctree::CLI.run(["create", "wt1", "wt1", "--config", custom.to_s])
+      }.to raise_error(SystemExit) { |e| expect(e.status).to eq(0) }
+
+      sibling = @work.parent / "wt1"
+
+      # The custom config was persisted into the worktree
+      persisted = sibling / ".ctree" / "config.yml"
+      expect(persisted).to exist
+      expect(persisted.read).to eq(File.read(custom.to_s))
+
+      # The exclude took effect (node_modules was not cloned)
+      expect(sibling / "node_modules").not_to exist
+
+      system("git", "-C", @work.to_s, "worktree", "remove", "--force", sibling.to_s,
+             out: File::NULL, err: File::NULL)
+    end
   end
 end

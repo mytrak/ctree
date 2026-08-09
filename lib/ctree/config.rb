@@ -38,6 +38,22 @@ module Ctree
       validate_and_normalize(result, repo_path)
     end
 
+    # Loads shipped defaults merged with a custom config file, skipping the
+    # repo's .ctree/config.yml layer entirely. The named file replaces what
+    # the repo config would have provided — shipped defaults are still the
+    # base underneath it.
+    #
+    # override_path - path to the custom config file, relative to Dir.pwd or
+    #                 absolute. Must exist, be parseable YAML, and be a top-
+    #                 level mapping. Dies with a clear message otherwise.
+    def load_with_override(override_path)
+      abs_path = File.expand_path(override_path, Dir.pwd)
+      result = load_yaml(SHIPPED_CONFIG_PATH, must_exist: true)
+      custom = load_yaml(abs_path, must_exist: true)
+      result = result.merge(custom) { |_, _, v| v }
+      validate_and_normalize(result, abs_path)
+    end
+
     # Returns the shipped defaults as a normalized, symbol-keyed hash.
     def defaults
       raw = load_yaml(SHIPPED_CONFIG_PATH, must_exist: true)

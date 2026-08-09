@@ -218,4 +218,84 @@ RSpec.describe Ctree::Config do
       end
     end
   end
+
+  describe ".load_with_override" do
+    it "merges custom config over shipped defaults" do
+      Dir.mktmpdir do |dir|
+        custom = File.join(dir, "my_config.yml")
+        File.write(custom, "update_volumes:\n  - data\n")
+        result = described_class.load_with_override(custom)
+        expect(result[:update_volumes]).to eq(["data"])
+        expect(result[:share_volumes]).to eq(described_class.defaults[:share_volumes])
+      end
+    end
+
+    it "custom config overrides only the keys it specifies; rest fall through" do
+      Dir.mktmpdir do |dir|
+        custom = File.join(dir, "my_config.yml")
+        File.write(custom, "exclude:\n  - node_modules\n")
+        result = described_class.load_with_override(custom)
+        expect(result[:exclude]).to eq(["node_modules"])
+        expect(result[:update_volumes]).to eq(described_class.defaults[:update_volumes])
+        expect(result[:share_volumes]).to eq(described_class.defaults[:share_volumes])
+      end
+    end
+
+    it "dies when the custom file does not exist" do
+      Dir.mktmpdir do |dir|
+        missing = File.join(dir, "nonexistent.yml")
+        expect {
+          described_class.load_with_override(missing)
+        }.to raise_error(SystemExit) { |e| expect(e.status).to eq(1) }
+          .and output(/missing.*#{Regexp.escape(missing)}/).to_stderr
+      end
+    end
+
+    it "dies when the custom file has invalid YAML" do
+      Dir.mktmpdir do |dir|
+        bad_yaml = File.join(dir, "bad.yml")
+        File.write(bad_yaml, "this: is: not: valid: yaml: [\n")
+        expect {
+          described_class.load_with_override(bad_yaml)
+        }.to raise_error(SystemExit) { |e| expect(e.status).to eq(1) }
+          .and output(/could not parse.*#{Regexp.escape(bad_yaml)}/).to_stderr
+      end
+    end
+
+    it "dies when the custom file top level is not a mapping" do
+      Dir.mktmpdir do |dir|
+        not_hash = File.join(dir, "not_hash.yml")
+        File.write(not_hash, "- a\n- b\n")
+        expect {
+          described_class.load_with_override(not_hash)
+        }.to raise_error(SystemExit) { |e| expect(e.status).to eq(1) }
+          .and output(/#{Regexp.escape(not_hash)}.*top-level must be a YAML mapping/).to_stderr
+      end
+    end
+
+    it "aborts when a custom config key has the wrong type" do
+      Dir.mktmpdir do |dir|
+        bad_type = File.join(dir, "bad_type.yml")
+        File.write(bad_type, "update_volumes: \"not a list\"\n")
+        expect {
+          described_class.load_with_override(bad_type)
+        }.to raise_error(SystemExit) { |e| expect(e.status).to eq(1) }
+          .and output(/missing or invalid "update_volumes"/).to_stderr
+      end
+    end
+
+    it "resolves relative paths from Dir.pwd" do
+      Dir.mktmpdir do |dir|
+        orig_pwd = Dir.pwd
+        begin
+          Dir.chdir(dir)
+          File.write(File.join(dir, "relative.yml"), "log_level: debug\n")
+          result = described_class.load_with_override("relative.yml")
+          expect(result[:log_level]).to eq("debug")
+        ensure
+          Dir.chdir(orig_pwd)
+        end
+      end
+    end
+  end
 end
