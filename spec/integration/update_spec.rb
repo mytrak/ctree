@@ -313,6 +313,106 @@ RSpec.describe "Ctree::CLI update" do
     end
   end
 
+  describe ".ctree exclusion" do
+    it "skips .ctree even when listed in update:" do
+      FileUtils.mkdir_p((@work / ".ctree").to_s)
+      File.write((@work / ".ctree" / "config.yml").to_s,
+                 "share_volumes:\n  - gems\n")
+      File.write((@work / ".gitignore").to_s, ".ctree/\n")
+      system("git", "-C", @work.to_s, "add", ".gitignore",
+             out: File::NULL, err: File::NULL)
+      system("git", "-C", @work.to_s, "commit", "-q", "--amend", "--no-edit",
+             out: File::NULL, err: File::NULL)
+
+      wt = @parent / "wt1"
+      system("git", "-C", @work.to_s, "worktree", "add", "-q", "-b", "wt1", wt.to_s,
+             out: File::NULL, err: File::NULL)
+      File.write((wt / ".env").to_s, "COMPOSE_PROJECT_NAME=wt1\n")
+
+      # Worktree config lists .ctree in update: — simulates user adding it
+      FileUtils.mkdir_p((wt / ".ctree").to_s)
+      File.write((wt / ".ctree" / "config.yml").to_s,
+                 "update:\n  - .ctree\n")
+
+      allow(Ctree::Prompt).to receive(:read_line).and_return("y")
+      stub_sh(
+        docker_system: [true],
+        docker_capture3: [
+          ["", "", true],
+          ["", "", true],
+          ["", "", true],
+          ["", "", true],
+        ]
+      )
+
+      Dir.chdir(wt.to_s) do
+        capture_stdout do
+          expect { Ctree::CLI.run(["update"]) }
+            .to raise_error(SystemExit) { |e| expect(e.status).to eq(0) }
+        end
+      end
+
+      # .ctree/config.yml in the worktree should be unchanged
+      expect((wt / ".ctree" / "config.yml").read).to eq(
+        "update:\n  - .ctree\n"
+      )
+    ensure
+      if defined?(wt) && wt
+        system("git", "-C", @work.to_s, "worktree", "remove", "--force", wt.to_s,
+               out: File::NULL, err: File::NULL)
+      end
+    end
+
+    it "leaves hand-edited .ctree/config.yml untouched during update" do
+      FileUtils.mkdir_p((@work / ".ctree").to_s)
+      File.write((@work / ".ctree" / "config.yml").to_s,
+                 "share_volumes:\n  - gems\n")
+      File.write((@work / ".gitignore").to_s, ".ctree/\n")
+      system("git", "-C", @work.to_s, "add", ".gitignore",
+             out: File::NULL, err: File::NULL)
+      system("git", "-C", @work.to_s, "commit", "-q", "--amend", "--no-edit",
+             out: File::NULL, err: File::NULL)
+
+      wt = @parent / "wt1"
+      system("git", "-C", @work.to_s, "worktree", "add", "-q", "-b", "wt1", wt.to_s,
+             out: File::NULL, err: File::NULL)
+      File.write((wt / ".env").to_s, "COMPOSE_PROJECT_NAME=wt1\n")
+
+      # Worktree config — simulate a user who hand-edited it after ctree create
+      FileUtils.mkdir_p((wt / ".ctree").to_s)
+      File.write((wt / ".ctree" / "config.yml").to_s,
+                 "log_level: debug\n")
+
+      allow(Ctree::Prompt).to receive(:read_line).and_return("y")
+      stub_sh(
+        docker_system: [true],
+        docker_capture3: [
+          ["", "", true],
+          ["", "", true],
+          ["", "", true],
+          ["", "", true],
+        ]
+      )
+
+      Dir.chdir(wt.to_s) do
+        capture_stdout do
+          expect { Ctree::CLI.run(["update"]) }
+            .to raise_error(SystemExit) { |e| expect(e.status).to eq(0) }
+        end
+      end
+
+      # .ctree/config.yml is not touched — update doesn't handle .ctree at all
+      expect((wt / ".ctree" / "config.yml").read).to eq(
+        "log_level: debug\n"
+      )
+    ensure
+      if defined?(wt) && wt
+        system("git", "-C", @work.to_s, "worktree", "remove", "--force", wt.to_s,
+               out: File::NULL, err: File::NULL)
+      end
+    end
+  end
+
   def capture_stdout
     original = $stdout
     $stdout = StringIO.new

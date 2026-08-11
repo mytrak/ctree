@@ -238,6 +238,11 @@ module Ctree
           sync_file_results << [rel, :skipped, "compose override file"]
           next
         end
+        if rel == ".ctree" || rel.start_with?(".ctree/")
+          Log.debug "skipped #{rel} (reserved directory managed by ctree create)"
+          sync_file_results << [rel, :skipped, "reserved directory"]
+          next
+        end
         src = source_root / rel
         tgt = target_path / rel
         if src.directory?

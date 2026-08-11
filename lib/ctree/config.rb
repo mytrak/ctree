@@ -6,6 +6,12 @@ module Ctree
   #   2. <source_root>/.ctree/config.yml — per-repo override; created by
   #                                        `ctree config add`. Keys here win.
   #
+  # Note on .ctree/config.yml: this file is intentionally NOT raw-cloned into
+  # worktrees (`.ctree` is hardcoded in the top-level exclusion list at the
+  # same tier as `.git`). Instead, `ctree create` explicitly recreates it in
+  # the new worktree from the source copy. This prevents stray files in source's
+  # `.ctree/` from propagating to worktrees. See CREATE.md for details.
+  #
   # Schema (all keys optional):
   #   update_volumes: [<string>, ...]
   #   share_volumes: [<string>, ...]
