@@ -170,7 +170,7 @@ module Ctree
 
       if docker_ok && !containers.empty?
         _, err, st = Spinner.with_spinner("stopping compose stack -p #{target_project}") do
-          Sh.capture3("docker", "compose", "-p", target_project, "down")
+          Sh.capture3("docker", "compose", "-p", target_project, "down", chdir: target_path.to_s)
         end
         if st.success?
           Log.info "compose stack stopped"

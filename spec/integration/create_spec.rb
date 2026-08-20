@@ -109,13 +109,46 @@ RSpec.describe "Ctree::CLI create" do
     %w[web webpack jobs].each do |service|
       expect(Ctree::Sh).to have_received(:capture3).with(
         "docker", "compose", "--project-directory", sibling.to_s,
-        "--project-name", "wt1", "up", "--no-start", "--no-build", service
+        "--project-name", "wt1", "up", "--no-start", "--no-build", service,
+        chdir: sibling.to_s
       )
     end
     expect(Ctree::Sh).not_to have_received(:capture3).with(
       "docker", "compose", "--project-directory", sibling.to_s,
-      "--project-name", "wt1", "up", "--no-start", "--no-build"
+      "--project-name", "wt1", "up", "--no-start", "--no-build",
+      chdir: sibling.to_s
     )
+
+    system("git", "-C", @work.to_s, "worktree", "remove", "--force", sibling.to_s,
+           out: File::NULL, err: File::NULL)
+  end
+
+  # Regression guard for CTR-002: docker compose resolves relative COMPOSE_FILE
+  # entries against the OS-level cwd, not --project-directory. Every compose
+  # call must therefore chdir into the target worktree, or shared volumes get
+  # silently created as local copies from the source repo's override file.
+  it "runs every docker compose call with chdir: pointing at the target worktree" do
+    allow(Ctree::Prompt).to receive(:for_env_var_change) { |_key, value| value }
+    allow(Ctree::Prompt).to receive(:read_line).and_return("n")
+    stub_clonefile
+    stub_sh(docker_capture3: docker_stubs)
+
+    compose_calls = []
+    allow(Ctree::Sh).to receive(:capture3).and_wrap_original do |original, *cmd, **kw|
+      compose_calls << [cmd, kw] if cmd.first(2) == ["docker", "compose"]
+      original.call(*cmd, **kw)
+    end
+
+    expect {
+      Ctree::CLI.run(["create", "wt1", "wt1"])
+    }.to raise_error(SystemExit) { |e| expect(e.status).to eq(0) }
+
+    sibling = @work.parent / "wt1"
+    expect(compose_calls).not_to be_empty
+    compose_calls.each do |cmd, kw|
+      expect(cmd).to include("--project-directory", sibling.to_s)
+      expect(kw[:chdir]).to eq(sibling.to_s)
+    end
 
     system("git", "-C", @work.to_s, "worktree", "remove", "--force", sibling.to_s,
            out: File::NULL, err: File::NULL)
@@ -143,7 +176,8 @@ RSpec.describe "Ctree::CLI create" do
     sibling = @work.parent / "wt1"
     expect(Ctree::Sh).to have_received(:capture3).with(
       "docker", "compose", "--project-directory", sibling.to_s,
-      "--project-name", "wt1", "up", "--no-start", "--no-build"
+      "--project-name", "wt1", "up", "--no-start", "--no-build",
+      chdir: sibling.to_s
     )
 
     system("git", "-C", @work.to_s, "worktree", "remove", "--force", sibling.to_s,

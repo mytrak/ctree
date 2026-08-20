@@ -7,9 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.2.0] - 2026-08-14
+## [0.2.0] - 2026-08-20
 
-- TODO: fill this out
+- Prevented creation of duplicate volumes for shared volumes
+- Changed how .ctree is created in the worktree (it is no longer copied from the source repo)
+- Added an option to use a custom config file during worktree creation
 
 ## [0.1.0] - 2026-07-11
 

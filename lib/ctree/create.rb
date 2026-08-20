@@ -475,7 +475,8 @@ module Ctree
         "docker", "compose",
         "--project-directory", target_path.to_s,
         "--project-name", target_project,
-        "config", "--services"
+        "config", "--services",
+        chdir: target_path.to_s
       )
       services = services_st.success? ? services_out.lines.map(&:strip).reject(&:empty?) : []
 
@@ -487,7 +488,8 @@ module Ctree
             "docker", "compose",
             "--project-directory", target_path.to_s,
             "--project-name", target_project,
-            "up", "--no-start", "--no-build"
+            "up", "--no-start", "--no-build",
+            chdir: target_path.to_s
           )
           no_start_errors << err.strip unless st.success?
         else
@@ -496,7 +498,8 @@ module Ctree
               "docker", "compose",
               "--project-directory", target_path.to_s,
               "--project-name", target_project,
-              "up", "--no-start", "--no-build", service
+              "up", "--no-start", "--no-build", service,
+              chdir: target_path.to_s
             )
             no_start_errors << "#{service}: #{err.strip}" unless st.success?
           end
