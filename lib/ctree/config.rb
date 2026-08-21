@@ -6,6 +6,12 @@ module Ctree
   #   2. <source_root>/.ctree/config.yml — per-repo override; created by
   #                                        `ctree config add`. Keys here win.
   #
+  # Note on .ctree/config.yml: this file is intentionally NOT raw-cloned into
+  # worktrees (`.ctree` is hardcoded in the top-level exclusion list at the
+  # same tier as `.git`). Instead, `ctree create` explicitly recreates it in
+  # the new worktree from the source copy. This prevents stray files in source's
+  # `.ctree/` from propagating to worktrees. See CREATE.md for details.
+  #
   # Schema (all keys optional):
   #   update_volumes: [<string>, ...]
   #   share_volumes: [<string>, ...]
@@ -36,6 +42,22 @@ module Ctree
       end
 
       validate_and_normalize(result, repo_path)
+    end
+
+    # Loads shipped defaults merged with a custom config file, skipping the
+    # repo's .ctree/config.yml layer entirely. The named file replaces what
+    # the repo config would have provided — shipped defaults are still the
+    # base underneath it.
+    #
+    # override_path - path to the custom config file, relative to Dir.pwd or
+    #                 absolute. Must exist, be parseable YAML, and be a top-
+    #                 level mapping. Dies with a clear message otherwise.
+    def load_with_override(override_path)
+      abs_path = File.expand_path(override_path, Dir.pwd)
+      result = load_yaml(SHIPPED_CONFIG_PATH, must_exist: true)
+      custom = load_yaml(abs_path, must_exist: true)
+      result = result.merge(custom) { |_, _, v| v }
+      validate_and_normalize(result, abs_path)
     end
 
     # Returns the shipped defaults as a normalized, symbol-keyed hash.

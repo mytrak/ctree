@@ -45,7 +45,7 @@ RSpec.describe Ctree::CLI do
 
     it "shows a command's required arguments next to its name" do
       _, args, desc = Ctree::CLI::COMMANDS.find { |name, _, _| name == "create" }
-      expect(args).to eq("<worktree_name> <branch_name>")
+      expect(args).to eq("<worktree_name> <branch_name> [--config <path>]")
       expect { Ctree::CLI.run(["help"]) }.to output(a_string_including(
         "  #{"create #{args}".ljust(Ctree::CLI::COMMAND_SIGNATURE_WIDTH)}#{desc}"
       )).to_stdout
@@ -98,6 +98,52 @@ RSpec.describe Ctree::CLI do
       expect(footnote_index).not_to be_nil
       expect(footer_index).not_to be_nil
       expect(footnote_index).to be < footer_index
+    end
+  end
+
+  describe "ctree create --config" do
+    before do
+      # Stub out Create.run so we don't actually create worktrees
+      allow(Ctree::Create).to receive(:run)
+    end
+
+    it "accepts --config <path> and passes config_path to Create.run" do
+      Ctree::CLI.run(["create", "wt1", "branch1", "--config", "/tmp/my_config.yml"])
+      expect(Ctree::Create).to have_received(:run).with(
+        name: "wt1", branch: "branch1", config_path: "/tmp/my_config.yml"
+      )
+    end
+
+    it "passes config_path: nil when --config is not given" do
+      Ctree::CLI.run(["create", "wt1", "branch1"])
+      expect(Ctree::Create).to have_received(:run).with(
+        name: "wt1", branch: "branch1", config_path: nil
+      )
+    end
+
+    it "exits when --config flag is given but no path follows" do
+      expect {
+        Ctree::CLI.run(["create", "wt1", "branch1", "--config"])
+      }.to raise_error(SystemExit) { |e| expect(e.status).to eq(1) }
+    end
+
+    it "exits when the flag in position 3 is not --config" do
+      expect {
+        Ctree::CLI.run(["create", "wt1", "branch1", "--cfg", "/tmp/x.yml"])
+      }.to raise_error(SystemExit) { |e| expect(e.status).to eq(1) }
+    end
+
+    it "exits when there are 4 arguments (wrong arg count)" do
+      expect {
+        Ctree::CLI.run(["create", "wt1", "branch1", "extra"])
+      }.to raise_error(SystemExit) { |e| expect(e.status).to eq(1) }
+    end
+
+    it "still validates the worktree name with --config" do
+      expect {
+        Ctree::CLI.run(["create", "BAD NAME", "branch1", "--config", "/tmp/x.yml"])
+      }.to raise_error(SystemExit) { |e| expect(e.status).to eq(1) }
+        .and output(/invalid name 'BAD NAME'/).to_stderr
     end
   end
 end

@@ -95,7 +95,7 @@ module Ctree
         answer = raw.to_s.gsub(/[\x00-\x1f\x7f]/, "").strip.downcase
         if answer.empty? || answer == "y" || answer == "yes"
           _, err, st = Spinner.with_spinner("stopping source compose stack") do
-            Sh.capture3("docker", "compose", "-p", source_project, "down")
+            Sh.capture3("docker", "compose", "-p", source_project, "down", chdir: source_root.to_s)
           end
           if st.success?
             Log.info "stopped source compose stack"
@@ -236,6 +236,11 @@ module Ctree
         if !override_rel.empty? && rel == override_rel
           Log.debug "skipped #{rel} (compose override file managed by ctree create)"
           sync_file_results << [rel, :skipped, "compose override file"]
+          next
+        end
+        if rel == ".ctree" || rel.start_with?(".ctree/")
+          Log.debug "skipped #{rel} (reserved directory managed by ctree create)"
+          sync_file_results << [rel, :skipped, "reserved directory"]
           next
         end
         src = source_root / rel

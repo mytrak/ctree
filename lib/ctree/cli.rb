@@ -5,7 +5,7 @@ module Ctree
     module_function
 
     COMMANDS = [
-      ["create", "<worktree_name> <branch_name>", "create a sibling worktree on a branch"],
+      ["create", "<worktree_name> <branch_name> [--config <path>]", "create a sibling worktree on a branch"],
       ["delete", "<worktree_name>", "remove a worktree and its Docker resources"],
       ["list", "[all | free | used]", "list worktrees for the current source repo"],
       ["switch", "<worktree_name>", "change directory into a worktree"],
@@ -46,12 +46,18 @@ module Ctree
     HELP = {
       "create" => <<~HELP,
         Usage:
-          ctree create <worktree_name> <branch_name>
+          ctree create <worktree_name> <branch_name> [--config <path>]
 
         Creates a sibling worktree at ../<worktree_name> on <branch_name>. The entire
         source directory is cloned using copy-on-write (clonefile on macOS, cp --reflink
         on Linux). Docker volumes are replicated under the new compose project name and
         a tailored .env is written — prompting you to accept or change each value.
+
+        Optional --config <path> replaces the repo's .ctree/config.yml with a custom
+        config file for this worktree. The custom file is merged over the shipped
+        defaults and persisted into the worktree's .ctree/config.yml so that later
+        commands (update, rebase, etc.) continue to use it. Path is relative to the
+        current directory.
       HELP
       "delete" => <<~HELP,
         Usage:
@@ -201,14 +207,20 @@ module Ctree
       when "version"
         puts "ctree #{VERSION}"
       when "create"
-        usage_and_exit unless argv.length == 3
+        if argv.length == 3
+          config_path = nil
+        elsif argv.length == 5 && argv[3] == "--config"
+          config_path = argv[4]
+        else
+          usage_and_exit
+        end
         name = argv[1]
         branch_arg = argv[2]
         Log.die invalid_name_message(name) unless name =~ NAME_PATTERN
         if branch_arg !~ BRANCH_NAME_PATTERN
           Log.die "invalid branch name '#{branch_arg}'; must match #{BRANCH_NAME_PATTERN.inspect}"
         end
-        Create.run(name: name, branch: branch_arg)
+        Create.run(name: name, branch: branch_arg, config_path: config_path)
       when "delete"
         usage_and_exit if argv.length != 2
         name = argv[1]

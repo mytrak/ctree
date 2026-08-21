@@ -71,6 +71,8 @@ compose_override_file: docker-compose.local.ctree.yml
 # Top-level names (files or directories) to skip when cloning the source
 # working tree into a new worktree during `ctree create`. Matched by
 # basename — top-level items only.
+# Note: .ctree is always implicitly excluded (it is a reserved directory
+# managed by ctree itself). Listing it here is a harmless no-op.
 # Examples: node_modules (directory), .env.local (file)
 exclude: []
 

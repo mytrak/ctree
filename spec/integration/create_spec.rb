@@ -109,13 +109,46 @@ RSpec.describe "Ctree::CLI create" do
     %w[web webpack jobs].each do |service|
       expect(Ctree::Sh).to have_received(:capture3).with(
         "docker", "compose", "--project-directory", sibling.to_s,
-        "--project-name", "wt1", "up", "--no-start", "--no-build", service
+        "--project-name", "wt1", "up", "--no-start", "--no-build", service,
+        chdir: sibling.to_s
       )
     end
     expect(Ctree::Sh).not_to have_received(:capture3).with(
       "docker", "compose", "--project-directory", sibling.to_s,
-      "--project-name", "wt1", "up", "--no-start", "--no-build"
+      "--project-name", "wt1", "up", "--no-start", "--no-build",
+      chdir: sibling.to_s
     )
+
+    system("git", "-C", @work.to_s, "worktree", "remove", "--force", sibling.to_s,
+           out: File::NULL, err: File::NULL)
+  end
+
+  # Regression guard for CTR-002: docker compose resolves relative COMPOSE_FILE
+  # entries against the OS-level cwd, not --project-directory. Every compose
+  # call must therefore chdir into the target worktree, or shared volumes get
+  # silently created as local copies from the source repo's override file.
+  it "runs every docker compose call with chdir: pointing at the target worktree" do
+    allow(Ctree::Prompt).to receive(:for_env_var_change) { |_key, value| value }
+    allow(Ctree::Prompt).to receive(:read_line).and_return("n")
+    stub_clonefile
+    stub_sh(docker_capture3: docker_stubs)
+
+    compose_calls = []
+    allow(Ctree::Sh).to receive(:capture3).and_wrap_original do |original, *cmd, **kw|
+      compose_calls << [cmd, kw] if cmd.first(2) == ["docker", "compose"]
+      original.call(*cmd, **kw)
+    end
+
+    expect {
+      Ctree::CLI.run(["create", "wt1", "wt1"])
+    }.to raise_error(SystemExit) { |e| expect(e.status).to eq(0) }
+
+    sibling = @work.parent / "wt1"
+    expect(compose_calls).not_to be_empty
+    compose_calls.each do |cmd, kw|
+      expect(cmd).to include("--project-directory", sibling.to_s)
+      expect(kw[:chdir]).to eq(sibling.to_s)
+    end
 
     system("git", "-C", @work.to_s, "worktree", "remove", "--force", sibling.to_s,
            out: File::NULL, err: File::NULL)
@@ -143,7 +176,8 @@ RSpec.describe "Ctree::CLI create" do
     sibling = @work.parent / "wt1"
     expect(Ctree::Sh).to have_received(:capture3).with(
       "docker", "compose", "--project-directory", sibling.to_s,
-      "--project-name", "wt1", "up", "--no-start", "--no-build"
+      "--project-name", "wt1", "up", "--no-start", "--no-build",
+      chdir: sibling.to_s
     )
 
     system("git", "-C", @work.to_s, "worktree", "remove", "--force", sibling.to_s,
@@ -657,6 +691,144 @@ RSpec.describe "Ctree::CLI create" do
       expect(`git -C #{@work} stash list`.strip).not_to be_empty
 
       system("git", "-C", @work.to_s, "worktree", "remove", "--force", (@work.parent / "wt1").to_s,
+             out: File::NULL, err: File::NULL)
+    end
+
+    it "accepts --config <path> and uses the custom config for the worktree" do
+      FileUtils.mkdir_p((@work / ".ctree").to_s)
+      File.write((@work / ".ctree" / "config.yml").to_s, "exclude: []\nupdate_volumes:\n  - something\n")
+      File.write((@work / ".gitignore").to_s, "node_modules/\n")
+      FileUtils.mkdir_p((@work / "node_modules").to_s)
+      File.write((@work / "node_modules" / "package.json").to_s, "{}")
+      system("git", "-C", @work.to_s, "add", ".ctree", ".gitignore", out: File::NULL, err: File::NULL)
+      system("git", "-C", @work.to_s, "commit", "-q", "--amend", "--no-edit",
+             out: File::NULL, err: File::NULL)
+
+      # Write a custom config that excludes node_modules
+      custom = @parent / "custom_config.yml"
+      File.write(custom.to_s, "exclude:\n  - node_modules\n")
+
+      allow(Ctree::Prompt).to receive(:for_env_var_change) { |_key, value| value }
+      allow(Ctree::Prompt).to receive(:read_line).and_return("n")
+      stub_clonefile
+      stub_sh(docker_capture3: docker_stubs)
+
+      expect {
+        Ctree::CLI.run(["create", "wt1", "wt1", "--config", custom.to_s])
+      }.to raise_error(SystemExit) { |e| expect(e.status).to eq(0) }
+
+      sibling = @work.parent / "wt1"
+
+      # The custom config was persisted into the worktree
+      persisted = sibling / ".ctree" / "config.yml"
+      expect(persisted).to exist
+      expect(persisted.read).to eq(File.read(custom.to_s))
+
+      # The exclude took effect (node_modules was not cloned)
+      expect(sibling / "node_modules").not_to exist
+
+      system("git", "-C", @work.to_s, "worktree", "remove", "--force", sibling.to_s,
+             out: File::NULL, err: File::NULL)
+    end
+  end
+
+  describe ".ctree exclusion" do
+    it "recreates .ctree/config.yml from source when source has one" do
+      FileUtils.mkdir_p((@work / ".ctree").to_s)
+      File.write((@work / ".ctree" / "config.yml").to_s,
+                 "exclude:\n  - node_modules\nshare_volumes:\n  - gems\n")
+      File.write((@work / ".gitignore").to_s, ".ctree/\n")
+      system("git", "-C", @work.to_s, "add", ".gitignore", out: File::NULL, err: File::NULL)
+      system("git", "-C", @work.to_s, "commit", "-q", "--amend", "--no-edit",
+             out: File::NULL, err: File::NULL)
+
+      allow(Ctree::Prompt).to receive(:for_env_var_change) { |_key, value| value }
+      allow(Ctree::Prompt).to receive(:read_line).and_return("n")
+      stub_clonefile
+      stub_sh(docker_capture3: docker_stubs)
+
+      expect {
+        Ctree::CLI.run(["create", "wt1", "wt1"])
+      }.to raise_error(SystemExit) { |e| expect(e.status).to eq(0) }
+
+      sibling = @work.parent / "wt1"
+      expect(sibling / ".ctree" / "config.yml").to exist
+      expect((sibling / ".ctree" / "config.yml").read).to eq(
+        "exclude:\n  - node_modules\nshare_volumes:\n  - gems\n"
+      )
+
+      system("git", "-C", @work.to_s, "worktree", "remove", "--force", sibling.to_s,
+             out: File::NULL, err: File::NULL)
+    end
+
+    it "does not clone extra files from source .ctree/ into worktree" do
+      FileUtils.mkdir_p((@work / ".ctree").to_s)
+      File.write((@work / ".ctree" / "config.yml").to_s, "share_volumes:\n  - gems\n")
+      File.write((@work / ".ctree" / "scratch.txt").to_s, "stray file")
+      File.write((@work / ".gitignore").to_s, ".ctree/\n")
+      system("git", "-C", @work.to_s, "add", ".gitignore", out: File::NULL, err: File::NULL)
+      system("git", "-C", @work.to_s, "commit", "-q", "--amend", "--no-edit",
+             out: File::NULL, err: File::NULL)
+
+      allow(Ctree::Prompt).to receive(:for_env_var_change) { |_key, value| value }
+      allow(Ctree::Prompt).to receive(:read_line).and_return("n")
+      stub_clonefile
+      stub_sh(docker_capture3: docker_stubs)
+
+      expect {
+        Ctree::CLI.run(["create", "wt1", "wt1"])
+      }.to raise_error(SystemExit) { |e| expect(e.status).to eq(0) }
+
+      sibling = @work.parent / "wt1"
+      expect(sibling / ".ctree" / "config.yml").to exist
+      expect(sibling / ".ctree" / "scratch.txt").not_to exist
+
+      system("git", "-C", @work.to_s, "worktree", "remove", "--force", sibling.to_s,
+             out: File::NULL, err: File::NULL)
+    end
+
+    it "creates no .ctree/ in worktree when source has none" do
+      allow(Ctree::Prompt).to receive(:for_env_var_change) { |_key, value| value }
+      allow(Ctree::Prompt).to receive(:read_line).and_return("n")
+      stub_clonefile
+      stub_sh(docker_capture3: docker_stubs)
+
+      expect {
+        Ctree::CLI.run(["create", "wt1", "wt1"])
+      }.to raise_error(SystemExit) { |e| expect(e.status).to eq(0) }
+
+      sibling = @work.parent / "wt1"
+      expect(sibling / ".ctree").not_to exist
+
+      system("git", "-C", @work.to_s, "worktree", "remove", "--force", sibling.to_s,
+             out: File::NULL, err: File::NULL)
+    end
+
+    it "accepts exclude: [.ctree] as a harmless no-op" do
+      FileUtils.mkdir_p((@work / ".ctree").to_s)
+      File.write((@work / ".ctree" / "config.yml").to_s,
+                 "exclude:\n  - .ctree\nshare_volumes:\n  - gems\n")
+      File.write((@work / ".gitignore").to_s, ".ctree/\n")
+      system("git", "-C", @work.to_s, "add", ".gitignore", out: File::NULL, err: File::NULL)
+      system("git", "-C", @work.to_s, "commit", "-q", "--amend", "--no-edit",
+             out: File::NULL, err: File::NULL)
+
+      allow(Ctree::Prompt).to receive(:for_env_var_change) { |_key, value| value }
+      allow(Ctree::Prompt).to receive(:read_line).and_return("n")
+      stub_clonefile
+      stub_sh(docker_capture3: docker_stubs)
+
+      expect {
+        Ctree::CLI.run(["create", "wt1", "wt1"])
+      }.to raise_error(SystemExit) { |e| expect(e.status).to eq(0) }
+
+      sibling = @work.parent / "wt1"
+      expect(sibling / ".ctree" / "config.yml").to exist
+      expect((sibling / ".ctree" / "config.yml").read).to eq(
+        "exclude:\n  - .ctree\nshare_volumes:\n  - gems\n"
+      )
+
+      system("git", "-C", @work.to_s, "worktree", "remove", "--force", sibling.to_s,
              out: File::NULL, err: File::NULL)
     end
   end

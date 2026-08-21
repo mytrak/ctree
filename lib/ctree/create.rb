@@ -4,7 +4,7 @@ module Ctree
   module Create
     module_function
 
-    def run(name:, branch:)
+    def run(name:, branch:, config_path: nil)
       source_root = Pathname.pwd
       toplevel_out, _, status = Sh.capture3("git", "-C", source_root.to_s, "rev-parse", "--show-toplevel")
       Log.die "not inside a git repository" unless status.success?
@@ -72,7 +72,11 @@ module Ctree
         end
       end
 
-      config = Config.load(source_root)
+      config = if config_path
+           Config.load_with_override(config_path)
+         else
+           Config.load(source_root)
+         end
       Log.debug_mode = config[:log_level] == "debug"
       share_volumes = config[:share_volumes]
       empty_volumes = config[:empty_volumes]
@@ -150,7 +154,7 @@ module Ctree
       Log.info "created worktree #{name} (branch: #{branch}) from #{source_basename}"
 
       items = Dir.glob(File.join(source_root.to_s, "*"), File::FNM_DOTMATCH)
-                 .reject { |p| %w[. .. .git].include?(File.basename(p)) }
+                 .reject { |p| %w[. .. .git .ctree].include?(File.basename(p)) }
       excluded = []
       if exclude.any?
         items, excluded = items.partition { |p| !exclude.include?(File.basename(p)) }
@@ -277,7 +281,36 @@ module Ctree
         Log.warn_ "git reset HEAD returned non-zero; git status may show unexpected changes"
       end
 
+      # Recreate .ctree/config.yml from source after the git sync.
+      # .ctree is gitignored, so git checkout/clean never touches it.
+      # Without this step the worktree would have no .ctree/config.yml at all,
+      # since the hardcoded .ctree skip above prevents raw-cloning the directory.
+      tgt_ctree_config = target_path / ".ctree" / "config.yml"
+      unless tgt_ctree_config.file?
+        src_ctree_config = source_root / ".ctree" / "config.yml"
+        if src_ctree_config.file?
+          FileUtils.mkdir_p(tgt_ctree_config.dirname.to_s)
+          FileUtils.cp(src_ctree_config.to_s, tgt_ctree_config.to_s)
+          Log.debug "recreated .ctree/config.yml in worktree (source not git-tracked)"
+        end
+      end
+
+      # When --config was given, persist the custom config into the worktree's
+      # .ctree/config.yml so later commands run from inside it pick it up.
+      # This must happen AFTER the git-sync step above, otherwise git checkout
+      # HEAD -- . would overwrite it with the committed version.
+      if config_path
+        ctree_dir = target_path / ".ctree"
+        FileUtils.mkdir_p(ctree_dir.to_s)
+        FileUtils.cp(File.expand_path(config_path, Dir.pwd), (ctree_dir / "config.yml").to_s)
+        Log.info "using custom config #{config_path} for this worktree (persisted to .ctree/config.yml)"
+      end
+
       config[:update].each do |rel|
+        if rel == ".ctree" || rel.start_with?(".ctree/")
+          Log.debug "skipped #{rel} (reserved directory managed by ctree create)"
+          next
+        end
         src = source_root / rel
         tgt = target_path / rel
         begin
@@ -442,7 +475,8 @@ module Ctree
         "docker", "compose",
         "--project-directory", target_path.to_s,
         "--project-name", target_project,
-        "config", "--services"
+        "config", "--services",
+        chdir: target_path.to_s
       )
       services = services_st.success? ? services_out.lines.map(&:strip).reject(&:empty?) : []
 
@@ -454,7 +488,8 @@ module Ctree
             "docker", "compose",
             "--project-directory", target_path.to_s,
             "--project-name", target_project,
-            "up", "--no-start", "--no-build"
+            "up", "--no-start", "--no-build",
+            chdir: target_path.to_s
           )
           no_start_errors << err.strip unless st.success?
         else
@@ -463,7 +498,8 @@ module Ctree
               "docker", "compose",
               "--project-directory", target_path.to_s,
               "--project-name", target_project,
-              "up", "--no-start", "--no-build", service
+              "up", "--no-start", "--no-build", service,
+              chdir: target_path.to_s
             )
             no_start_errors << "#{service}: #{err.strip}" unless st.success?
           end

@@ -63,7 +63,7 @@ Most commands run from the source repository.
 `update`, `rebase`, `free`, `env`, and `compose-config` run from inside a worktree.
 
 ```bash
-ctree create <worktree_name> <branch_name>
+ctree create <worktree_name> <branch_name> [--config <path>]
 ctree delete <worktree_name>
 ctree list   [all | free | used]
 ctree switch <worktree_name>
@@ -91,6 +91,14 @@ After the cloning, docker volumes are replicated under the new compose
 prefix and a tailored `.env` is written with `COMPOSE_PROJECT_NAME`.
 For each constant defined in the source `.env` you will be prompted
 to either accept or update the value for the worktree.
+
+The optional `--config <path>` flag lets you create a worktree with a
+custom configuration that differs from the repo's shared `.ctree/config.yml`.
+The file is merged over the shipped defaults (the repo config layer is
+skipped for this worktree) and persisted into the worktree's own
+`.ctree/config.yml` so that later commands like `update`, `rebase`,
+`free`, and `env` continue to use it automatically. The path is relative
+to the current directory.
 
 ### delete
 
@@ -267,12 +275,18 @@ present.
 
 Which docker volumes ctree copies, syncs, or treats as source-shared caches
 is controlled by config — not by hardcoded values in the executable. There
-are two layers:
+are two layers, with an optional third that replaces the per-repo layer for
+a single worktree:
 
-1. **Shipped defaults** in `lib/ctree/defaults.yml` (loaded automatically).
-2. **Per-repo override** at `<source_repo>/.ctree.yml` (optional). Keys
+1. **Shipped defaults** in `lib/ctree/config.yml` (loaded automatically).
+2. **Per-repo override** at `<source_repo>/.ctree/config.yml` (optional). Keys
    present here replace the shipped values; keys you omit fall through to
    the defaults.
+3. **`ctree create --config <path>`** (optional, per-worktree). Skips the
+   per-repo layer entirely for that worktree and merges the named file over
+   shipped defaults instead. The custom file is persisted into the
+   worktree's own `.ctree/config.yml` so that later commands (`update`,
+   `rebase`, `free`, `env`, `compose-config`) continue to use it.
 
 ### Schema
 
@@ -403,6 +417,10 @@ are two layers:
 - **Wrong type for a known key** (e.g. a string where a list is expected)
   → ctree exits with an error pointing at the offending key. Fix the file
   and re-run.
+- **`--config <path>` errors** — unlike the optional per-repo config,
+  errors in a custom config file are always fatal: a missing file, invalid
+  YAML, or wrong key type causes ctree to exit immediately with no partial
+  state left behind.
 
 ## Traefik / reverse-proxy domain routing
 
