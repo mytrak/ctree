@@ -4,7 +4,7 @@ module Ctree
   module Delete
     module_function
 
-    def run(name:)
+    def run(name:, force: false)
       source_root = Pathname.pwd
       toplevel_out, _, status = Sh.capture3("git", "-C", source_root.to_s, "rev-parse", "--show-toplevel")
       Log.die "not inside a git repository" unless status.success?
@@ -157,10 +157,8 @@ module Ctree
       puts "  Source project (#{source_root}) will NOT be touched."
       puts
 
-      raw = Prompt.read_line("[#{PROG}] Type 'yes' to confirm deletion of '#{name}': ")
-      answer = raw.to_s.gsub(/[\x00-\x1f\x7f]/, "").strip
-      unless answer == "yes"
-        warn "[#{PROG}] aborted: confirmation not given (received #{answer.inspect}, expected 'yes'). No changes made."
+      unless Prompt.confirm("Type 'yes' to confirm deletion of '#{name}':", default: nil, force: force)
+        warn "[#{PROG}] aborted: confirmation not given. No changes made."
         exit 1
       end
 

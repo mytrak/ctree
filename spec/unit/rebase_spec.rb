@@ -41,6 +41,56 @@ RSpec.describe "Ctree::Rebase main branch skip logic" do
   end
 end
 
+RSpec.describe "Ctree::Rebase uncommitted-changes prompt and --force" do
+  around do |ex|
+    Dir.mktmpdir do |tmp|
+      @source = Pathname.new(tmp).realpath
+      Dir.mkdir((@source / "worktree").to_s)
+      @target = (@source / "worktree").realpath
+      Dir.chdir(@target.to_s) { ex.run }
+    end
+  end
+
+  def stub_dirty_worktree
+    allow(Ctree::Sh).to receive(:capture3) do |*cmd|
+      case [cmd[0], cmd[3], cmd[4]]
+      when ["git", "rev-parse", "--show-toplevel"]  then [@target.to_s, "", fake_status(true)]
+      when ["git", "rev-parse", "--git-common-dir"] then ["../.git", "", fake_status(true)]
+      when ["git", "rev-parse", "--abbrev-ref"]     then ["CTR-001", "", fake_status(true)]
+      when ["git", "status", "--porcelain"]         then [" M file.rb\n", "", fake_status(true)]
+      else raise "unexpected: #{cmd.inspect}"
+      end
+    end
+    allow(Ctree::Config).to receive(:load).and_return(Ctree::Config.defaults)
+    allow(Ctree::Rebase).to receive(:embedded_repos).and_return([])
+  end
+
+  it "aborts (default :no) when force is true and the worktree is dirty, without reading stdin" do
+    stub_dirty_worktree
+    expect(Ctree::Prompt).not_to receive(:read_line)
+    expect {
+      Ctree::Rebase.run(force: true)
+    }.to raise_error(SystemExit) { |e| expect(e.status).to eq(1) }
+      .and output(/proceed anyway\?.*no \(--force\)/).to_stdout
+  end
+
+  it "still prompts interactively when a dirty worktree is not forced" do
+    stub_dirty_worktree
+    # On success Rebase.run calls exit(0); stub it so the successful run
+    # doesn't terminate the rspec process with an unrescued SystemExit.
+    allow(Ctree::Rebase).to receive(:exit)
+    allow(Ctree::Prompt).to receive(:read_line).and_return("y")
+    allow(Ctree::Sh).to receive(:capture3)
+      .with("git", "-C", @target.to_s, "merge-base", "--is-ancestor", "master", "HEAD")
+      .and_return(["", "", fake_status(false)])
+    allow(Ctree::Sh).to receive(:capture3)
+      .with("git", "-C", @target.to_s, "rebase", "master")
+      .and_return(["", "", fake_status(true)])
+    expect { Ctree::Rebase.run }
+      .to output(/rebased CTR-001 onto master/).to_stdout
+  end
+end
+
 RSpec.describe "Ctree::Rebase embedded repo discovery" do
   around do |ex|
     Dir.mktmpdir do |tmp|

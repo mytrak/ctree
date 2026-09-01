@@ -40,6 +40,10 @@ module Ctree
       Most commands run from the top of the source repository.
       `update`, `rebase`, `free`, `env`, and `compose-config` run from inside a worktree.
 
+      Pass --force with create, delete, free, rebase, update, env fix, config
+      add, or config delete to skip confirmation prompts and assume the default
+      answer shown in brackets (or "yes" for prompts that require typing "yes").
+
       Use "ctree help <command>" for more information about a command.
     USAGE
 
@@ -58,6 +62,9 @@ module Ctree
         defaults and persisted into the worktree's .ctree/config.yml so that later
         commands (update, rebase, etc.) continue to use it. Path is relative to the
         current directory.
+
+        --force skips all confirmation prompts (assuming the bracket default, or
+        the shown value for per-var .env prompts) so create runs non-interactively.
       HELP
       "delete" => <<~HELP,
         Usage:
@@ -67,6 +74,8 @@ module Ctree
         confirmation, then tears down the directory, git worktree registration,
         per-project Docker volumes, and any running compose stack. Branches are
         always preserved.
+
+        --force skips the confirmation prompt and proceeds with deletion.
       HELP
       "switch" => <<~HELP,
         Usage:
@@ -93,6 +102,11 @@ module Ctree
         name, rsyncs allowlisted volumes (update_volumes), and copies paths listed
         in the update config key. Warns and prompts before running if the source repo
         is on a non-default branch.
+
+        --force assumes the shown defaults for the prompts: the branch-mismatch
+        prompt defaults to *not* proceeding — so --force with a non-default source
+        branch will abort the update rather than forcing it through. The stop-source-
+        containers prompt defaults to yes and will run under --force.
       HELP
       "rebase" => <<~HELP,
         Usage:
@@ -106,6 +120,10 @@ module Ctree
 
         All operations are local — no network calls. Update the source repo first,
         then run `ctree rebase` from the worktree to catch it up.
+
+        --force assumes the shown default for the uncommitted-changes prompt,
+        which defaults to *not* proceeding — so --force will abort a rebase run
+        against a dirty worktree rather than forcing it through.
       HELP
       "free" => <<~HELP,
         Usage:
@@ -117,6 +135,8 @@ module Ctree
         "FREE-"). If all are occupied, creates the next sequential one, filling gaps
         (FREE-001 + FREE-003 occupied → creates FREE-002). The prefix is configurable
         via free_branch_prefix in .ctree/config.yml.
+
+        --force skips the confirmation prompt and frees the worktree.
       HELP
       "env" => <<~HELP,
         Usage:
@@ -139,6 +159,9 @@ module Ctree
                   Extra keys    — offered for deletion (y/N)
                 Keys already present in both are left untouched. ctree-managed
                 keys and skip_env_keys are never offered for deletion.
+
+                --force keeps source values for missing keys (no prompt) and
+                assumes the deletion default ("no") for extra keys.
       HELP
       "compose-config" => <<~HELP,
         Usage:
@@ -155,6 +178,10 @@ module Ctree
         Manages the per-repo .ctree/config.yml. "list" prints the resolved config
         (defaults merged with repo overrides); "add" scaffolds a new config file with
         annotated defaults; "delete" removes the file and its directory.
+
+        --force skips confirmation: "add" resets an existing config file (default
+        no, so it won't under --force) and "delete" proceeds with removal (default
+        yes for explicit-typing prompts).
       HELP
       "domain" => <<~HELP,
         Usage:
@@ -202,6 +229,9 @@ module Ctree
     def run(argv)
       usage_and_exit if argv.empty?
 
+      force = argv.include?("--force")
+      argv = argv.reject { |a| a == "--force" }
+
       verb = argv[0]
       case verb
       when "version"
@@ -220,12 +250,12 @@ module Ctree
         if branch_arg !~ BRANCH_NAME_PATTERN
           Log.die "invalid branch name '#{branch_arg}'; must match #{BRANCH_NAME_PATTERN.inspect}"
         end
-        Create.run(name: name, branch: branch_arg, config_path: config_path)
+        Create.run(name: name, branch: branch_arg, config_path: config_path, force: force)
       when "delete"
         usage_and_exit if argv.length != 2
         name = argv[1]
         Log.die invalid_name_message(name) unless name =~ NAME_PATTERN
-        Delete.run(name: name)
+        Delete.run(name: name, force: force)
       when "switch"
         usage_and_exit if argv.length != 2
         name = argv[1]
@@ -233,15 +263,15 @@ module Ctree
         Switch.run(name: name)
       when "update"
         usage_and_exit unless argv.length == 1
-        Update.run
+        Update.run(force: force)
       when "free"
         usage_and_exit unless argv.length == 1
-        Free.run
+        Free.run(force: force)
       when "env"
         subcommand = argv[1]
         usage_and_exit unless %w[list check fix].include?(subcommand)
         usage_and_exit unless argv.length == 2
-        EnvCmd.run(subcommand)
+        EnvCmd.run(subcommand, force: force)
       when "compose-config"
         subcommand = argv[1]
         usage_and_exit unless %w[list check fix].include?(subcommand)
@@ -249,7 +279,7 @@ module Ctree
         ComposeConfigCmd.run(subcommand)
       when "rebase"
         usage_and_exit unless argv.length == 1
-        Rebase.run
+        Rebase.run(force: force)
       when "shell-init"
         usage_and_exit unless argv.length == 1
         ShellInit.run
@@ -286,9 +316,9 @@ module Ctree
         when ["list"]
           Config.print_resolved!
         when ["add"]
-          Config.add_local!
+          Config.add_local!(force: force)
         when ["delete"]
-          Config.remove_local!
+          Config.remove_local!(force: force)
         else
           usage_and_exit
         end

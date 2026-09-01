@@ -133,21 +133,16 @@ RSpec.describe "Ctree::CLI create" do
     stub_clonefile
     stub_sh(docker_capture3: docker_stubs)
 
-    compose_calls = []
-    allow(Ctree::Sh).to receive(:capture3).and_wrap_original do |original, *cmd, **kw|
-      compose_calls << [cmd, kw] if cmd.first(2) == ["docker", "compose"]
-      original.call(*cmd, **kw)
-    end
-
     expect {
       Ctree::CLI.run(["create", "wt1", "wt1"])
     }.to raise_error(SystemExit) { |e| expect(e.status).to eq(0) }
 
     sibling = @work.parent / "wt1"
+    compose_calls = capture3_calls.select { |cmd, _| cmd.first(2) == ["docker", "compose"] }
     expect(compose_calls).not_to be_empty
-    compose_calls.each do |cmd, kw|
+    compose_calls.each do |cmd, opts|
       expect(cmd).to include("--project-directory", sibling.to_s)
-      expect(kw[:chdir]).to eq(sibling.to_s)
+      expect(opts[:chdir]).to eq(sibling.to_s)
     end
 
     system("git", "-C", @work.to_s, "worktree", "remove", "--force", sibling.to_s,
@@ -654,6 +649,27 @@ RSpec.describe "Ctree::CLI create" do
       expect {
         Ctree::CLI.run(["create", "wt1", "wt1"])
       }.to raise_error(SystemExit) { |e| expect(e.status).to eq(1) }
+    end
+
+    it "creates without prompting when --force is passed against a dirty, non-master source" do
+      system("git", "checkout", "-q", "-b", "feature-x", out: File::NULL, err: File::NULL)
+      File.write(".env", "COMPOSE_PROJECT_NAME=src\nDB_PORT=5432\nDIRTY=true\n")
+      allow(Ctree::Prompt).to receive(:for_env_var_change) { |_key, value| value }
+      expect(Ctree::Prompt).not_to receive(:read_line)
+      stub_clonefile
+      stub_sh(docker_capture3: docker_stubs)
+
+      expect {
+        Ctree::CLI.run(["create", "wt1", "wt1", "--force"])
+      }.to raise_error(SystemExit) { |e| expect(e.status).to eq(0) }
+        .and output(/stashed uncommitted changes/).to_stdout
+
+      current = `git -C #{@work} rev-parse --abbrev-ref HEAD`.strip
+      expect(current).to eq("master")
+      expect(`git -C #{@work} stash list`.strip).not_to be_empty
+
+      system("git", "-C", @work.to_s, "worktree", "remove", "--force", (@work.parent / "wt1").to_s,
+             out: File::NULL, err: File::NULL)
     end
 
     it "switches source to master and continues when not on master, no uncommitted changes, user accepts" do

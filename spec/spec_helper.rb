@@ -37,8 +37,10 @@ module CtreeShStub
   def stub_sh(docker_capture3:, docker_system: [])
     @docker_capture3 = docker_capture3.dup
     @docker_system = docker_system.dup
+    @capture3_calls = []
 
-    allow(Ctree::Sh).to receive(:capture3) do |*cmd|
+    allow(Ctree::Sh).to receive(:capture3) do |*cmd, **opts|
+      @capture3_calls << [cmd, opts]
       if cmd.first == "docker"
         resp = @docker_capture3.shift
         raise "unexpected docker capture3 call: #{cmd.inspect}" unless resp
@@ -46,7 +48,7 @@ module CtreeShStub
         st = fake_status(st) if st == true || st == false
         [out, err, st]
       else
-        Open3.capture3(*cmd)
+        Open3.capture3(*cmd, **opts)
       end
     end
 
@@ -68,6 +70,11 @@ module CtreeShStub
     # (which use the real Process.detach).
     allow(Ctree::Sh).to receive(:spawn).and_return(123_456)
     allow(Ctree::Sh).to receive(:detach)
+  end
+
+  # Every capture3 call routed through the stub, as [cmd, opts] pairs.
+  def capture3_calls
+    @capture3_calls
   end
 end
 

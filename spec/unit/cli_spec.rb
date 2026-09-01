@@ -110,14 +110,25 @@ RSpec.describe Ctree::CLI do
     it "accepts --config <path> and passes config_path to Create.run" do
       Ctree::CLI.run(["create", "wt1", "branch1", "--config", "/tmp/my_config.yml"])
       expect(Ctree::Create).to have_received(:run).with(
-        name: "wt1", branch: "branch1", config_path: "/tmp/my_config.yml"
+        name: "wt1", branch: "branch1", config_path: "/tmp/my_config.yml", force: false
       )
     end
 
     it "passes config_path: nil when --config is not given" do
       Ctree::CLI.run(["create", "wt1", "branch1"])
       expect(Ctree::Create).to have_received(:run).with(
-        name: "wt1", branch: "branch1", config_path: nil
+        name: "wt1", branch: "branch1", config_path: nil, force: false
+      )
+    end
+
+    it "strips --force from argv regardless of position and passes force: true" do
+      Ctree::CLI.run(["create", "wt1", "branch1", "--force"])
+      expect(Ctree::Create).to have_received(:run).with(
+        name: "wt1", branch: "branch1", config_path: nil, force: true
+      )
+      Ctree::CLI.run(["--force", "create", "wt2", "branch2"])
+      expect(Ctree::Create).to have_received(:run).with(
+        name: "wt2", branch: "branch2", config_path: nil, force: true
       )
     end
 

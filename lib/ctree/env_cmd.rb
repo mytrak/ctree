@@ -4,7 +4,7 @@ module Ctree
   module EnvCmd
     module_function
 
-    def run(subcommand)
+    def run(subcommand, force: false)
       target_path, source_root = resolve_worktree!
       config    = Config.load(source_root)
       skip_keys = config[:skip_env_keys]
@@ -12,7 +12,7 @@ module Ctree
       case subcommand
       when "list"  then cmd_list(target_path, source_root, skip_keys, config[:env_filename])
       when "check" then cmd_check(target_path, source_root, config)
-      when "fix"   then cmd_fix(target_path, source_root, config)
+      when "fix"   then cmd_fix(target_path, source_root, config, force: force)
       else Log.die "unknown subcommand '#{subcommand}'; use: list, check, or fix"
       end
     end
@@ -85,7 +85,7 @@ module Ctree
       end
     end
 
-    def cmd_fix(target_path, source_root, config)
+    def cmd_fix(target_path, source_root, config, force: false)
       env_filename = config[:env_filename]
       tgt_env_path = target_path / env_filename
       Log.die "no #{env_filename} found at #{tgt_env_path}" unless tgt_env_path.file?
@@ -106,14 +106,14 @@ module Ctree
       end
 
       missing.each do |key|
-        new_value = Prompt.for_env_var_change(key, src_env[key])
+        new_value = Prompt.for_env_var_change(key, src_env[key], force: force)
         EnvFile.upsert(tgt_env_path.to_s, key, new_value)
       end
 
       orphaned.each do |key|
-        raw = Prompt.read_line("[#{PROG}] #{key}=#{tgt_env[key]} (not in source #{env_filename}, delete? [y/N]): ")
-        answer = raw.to_s.gsub(/[\x00-\x1f\x7f]/, "").strip.downcase
-        EnvFile.delete(tgt_env_path.to_s, key) if answer == "y" || answer == "yes"
+        if Prompt.confirm("#{key}=#{tgt_env[key]} (not in source #{env_filename}, delete? [y/N]):", default: :no, force: force)
+          EnvFile.delete(tgt_env_path.to_s, key)
+        end
       end
 
       Log.info "updated #{env_filename}"
