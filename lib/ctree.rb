@@ -240,37 +240,41 @@ module Ctree
       end
     end
 
-    def for_db_port_change(current_port)
-      loop do
-        prompt = "[#{PROG}] DB_PORT=#{current_port}. Press enter to keep, or type a new port: "
-        raw = read_line(prompt)
-        return current_port if raw.nil?
+    # Centralized yes/no confirmation. `default` is :yes, :no, or nil (no
+    # bracketed default — the prompt text itself must ask the user to type
+    # the literal word "yes"). Under force: true, skips stdin and returns
+    # the assumed answer, logging one line so --force runs stay legible.
+    def confirm(message, default:, force: false)
+      if force
+        assumed = default == :yes || default.nil?
+        Log.info "#{message} #{assumed ? "yes" : "no"} (--force)"
+        return assumed
+      end
 
-        answer = raw.gsub(/[\x00-\x1f\x7f]/, "").strip
-        return current_port if answer.empty?
-
-        unless answer =~ /\A\d+\z/
-          Log.warn_ "#{answer.inspect} is not a valid port; please enter digits only (1-65535)"
-          next
+      raw = read_line("[#{PROG}] #{message} ")
+      if default.nil?
+        raw.to_s.gsub(/[\x00-\x1f\x7f]/, "").strip == "yes"
+      else
+        answer = raw.to_s.gsub(/[\x00-\x1f\x7f]/, "").strip.downcase
+        if default == :yes
+          answer.empty? || answer == "y" || answer == "yes"
+        else
+          answer == "y" || answer == "yes"
         end
-        port = answer.to_i
-        unless port.between?(1, 65_535)
-          Log.warn_ "port #{port} is out of range; must be 1-65535"
-          next
-        end
-        return port.to_s
       end
     end
 
     # Generic prompt for any .env variable. Prints key=value as a log line
     # then prompts on a short second line — avoids Readline redraw artifacts
     # caused by prompts longer than the terminal width.
-    def for_env_var_change(key, current_value, worktree_values: {})
+    def for_env_var_change(key, current_value, worktree_values: {}, force: false)
       puts "[#{PROG}] #{key}=#{current_value}"
       if worktree_values.any?
         pad = worktree_values.keys.map(&:length).max
         worktree_values.each { |wt, val| puts "  #{wt.ljust(pad)}: #{val}" }
       end
+      return current_value if force
+
       raw = read_line("  (enter to keep, or type a new value): ")
       return current_value if raw.nil?
       answer = raw.gsub(/[\x00-\x1f\x7f]/, "").strip

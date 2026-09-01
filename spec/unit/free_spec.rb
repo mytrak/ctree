@@ -93,6 +93,14 @@ RSpec.describe Ctree::Free do
       expect { described_class.run }.to raise_error(SystemExit) { |e| expect(e.status).to eq(0) }
     end
 
+    it "frees the worktree without prompting when force is true" do
+      stub_run(branches_output: "", porcelain: "")
+      expect(Ctree::Prompt).not_to receive(:read_line)
+      described_class.run(force: true)
+      expect(Ctree::Sh).to have_received(:capture3)
+        .with("git", "-C", @target.to_s, "checkout", "-b", "FREE-001")
+    end
+
     it "exits early without prompting when already on a free branch" do
       stub_run
       allow(Ctree::Sh).to receive(:capture3)

@@ -48,6 +48,23 @@ RSpec.describe "Ctree::CLI delete" do
     FileUtils.rm_rf(target.to_s) if defined?(target) && target
   end
 
+  it "proceeds without prompting when --force is passed" do
+    target = @parent / "ghost"
+    FileUtils.mkdir_p(target.to_s)
+    File.write((target / "file.txt").to_s, "x")
+
+    expect(Ctree::Prompt).not_to receive(:read_line)
+
+    stub_sh(docker_capture3: [], docker_system: [false])
+
+    capture_stdout do
+      expect { Ctree::CLI.run(["delete", "ghost", "--force"]) }
+        .to raise_error(SystemExit) { |e| expect(e.status).to eq(0) }
+    end
+  ensure
+    FileUtils.rm_rf(target.to_s) if defined?(target) && target
+  end
+
   describe "speedups" do
     it "batches docker volume rm into a single call across all volumes" do
       target = @parent / "ghost"

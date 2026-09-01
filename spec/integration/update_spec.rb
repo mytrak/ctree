@@ -113,6 +113,37 @@ RSpec.describe "Ctree::CLI update" do
     end
   end
 
+  it "aborts without prompting when --force is passed and the source is on a feature branch (prompt defaults to no)" do
+    wt = @parent / "wt1"
+    system("git", "-C", @work.to_s, "worktree", "add", "-q", "-b", "wt1", wt.to_s,
+           out: File::NULL, err: File::NULL)
+    File.write((wt / ".env").to_s, "COMPOSE_PROJECT_NAME=wt1\n")
+    system("git", "-C", @work.to_s, "checkout", "-q", "-b", "feature-x",
+           out: File::NULL, err: File::NULL)
+
+    expect(Ctree::Prompt).not_to receive(:read_line)
+    stub_sh(
+      docker_system: [true],
+      docker_capture3: [
+        ["src-web\tsha256:AAA\n", "", true],   # source image ids
+        ["", "", true]                          # worktree image ids (none -> stale)
+      ]
+    )
+
+    Dir.chdir(wt.to_s) do
+      expect {
+        Ctree::CLI.run(["update", "--force"])
+      }.to output(/source repo is on branch 'feature-x'/).to_stderr
+        .and output(/proceed with update\?.*no \(--force\)/).to_stdout
+        .and raise_error(SystemExit) { |e| expect(e.status).to eq(1) }
+    end
+  ensure
+    if defined?(wt) && wt
+      system("git", "-C", @work.to_s, "worktree", "remove", "--force", wt.to_s,
+             out: File::NULL, err: File::NULL)
+    end
+  end
+
   it "copies update file from source to worktree" do
     FileUtils.mkdir_p((@work / ".ctree").to_s)
     File.write((@work / ".ctree" / "config.yml").to_s,

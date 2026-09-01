@@ -78,6 +78,15 @@ ctree compose-config [list | check | fix]
 ctree help <command>
 ```
 
+Any command that normally prompt for confirmation — `create`, `delete`,
+`free`, `rebase`, `update`, `env fix`, `config add`, and `config delete` —
+accepts a global `--force` flag that skips the prompts and assumes the
+default answer shown in brackets. For prompts with no bracket default
+(i.e. ones that ask you to type the literal word "yes"), `--force` assumes
+yes. Use `ctree help <command>` for per-command specifics, including the
+cases where the assumed default means *not* proceeding (e.g. `rebase` and
+`update` against a dirty or off-branch source).
+
 ### create
 
 Creates a sibling worktree at `../<worktree_name>`. The entire source

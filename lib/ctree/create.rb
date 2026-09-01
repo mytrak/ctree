@@ -4,7 +4,7 @@ module Ctree
   module Create
     module_function
 
-    def run(name:, branch:, config_path: nil)
+    def run(name:, branch:, config_path: nil, force: false)
       source_root = Pathname.pwd
       toplevel_out, _, status = Sh.capture3("git", "-C", source_root.to_s, "rev-parse", "--show-toplevel")
       Log.die "not inside a git repository" unless status.success?
@@ -46,9 +46,7 @@ module Ctree
           has_changes = !dirty_out.strip.empty?
 
           if has_changes
-            raw = Prompt.read_line("[#{PROG}] stash uncommitted changes and switch to master? [Y/n]: ")
-            answer = raw.to_s.gsub(/[\x00-\x1f\x7f]/, "").strip.downcase
-            if answer.empty? || answer == "y" || answer == "yes"
+            if Prompt.confirm("stash uncommitted changes and switch to master? [Y/n]:", default: :yes, force: force)
               _, stash_err, stash_st = Sh.capture3("git", "-C", source_root.to_s, "stash")
               Log.die "git stash failed: #{stash_err.strip}" unless stash_st.success?
               Log.info "stashed uncommitted changes"
@@ -59,9 +57,7 @@ module Ctree
               Log.die "please checkout master in the source repo and re-run ctree"
             end
           else
-            raw = Prompt.read_line("[#{PROG}] switch source to master branch? [Y/n]: ")
-            answer = raw.to_s.gsub(/[\x00-\x1f\x7f]/, "").strip.downcase
-            if answer.empty? || answer == "y" || answer == "yes"
+            if Prompt.confirm("switch source to master branch? [Y/n]:", default: :yes, force: force)
               _, co_err, co_st = Sh.capture3("git", "-C", source_root.to_s, "checkout", "master")
               Log.die "git checkout master failed: #{co_err.strip}" unless co_st.success?
               Log.info "switched source to master"
@@ -116,9 +112,7 @@ module Ctree
       Log.die "docker ps failed" unless status.success?
       unless ps_out.strip.empty?
         Log.warn_ "source compose stack has running containers"
-        raw = Prompt.read_line("[#{PROG}] stop source containers before creating worktree? [Y/n]: ")
-        answer = raw.to_s.gsub(/[\x00-\x1f\x7f]/, "").strip.downcase
-        if answer.empty? || answer == "y" || answer == "yes"
+        if Prompt.confirm("stop source containers before creating worktree? [Y/n]:", default: :yes, force: force)
           _, err, st = Spinner.with_spinner("stopping source compose stack") do
             Sh.capture3("docker", "compose", "-p", source_project, "down")
           end
@@ -626,7 +620,7 @@ module Ctree
         puts
         promptable.each do |key, value|
           worktree_values = sibling_envs.filter_map { |wt, env| [wt, env[key]] if env[key] }.to_h
-          new_value = Prompt.for_env_var_change(key, value, worktree_values: worktree_values)
+          new_value = Prompt.for_env_var_change(key, value, worktree_values: worktree_values, force: force)
           final_env_vars[key] = new_value
 
           if new_value != value
@@ -688,9 +682,7 @@ module Ctree
           Log.warn_ "branch '#{branch}' is #{behind} commit(s) behind master"
           Log.warn_ "its lockfiles may not match the replicated gem/package"
           Log.warn_ "volumes, which can prevent the stack from booting"
-          raw = Prompt.read_line("[#{PROG}] rebase '#{branch}' onto master now? [Y/n]: ")
-          answer = raw.to_s.gsub(/[\x00-\x1f\x7f]/, "").strip.downcase
-          if answer.empty? || answer == "y" || answer == "yes"
+          if Prompt.confirm("rebase '#{branch}' onto master now? [Y/n]:", default: :yes, force: force)
             _, _, rb_st = Spinner.with_spinner("rebasing #{branch} onto master") do
               Sh.capture3("git", "-C", target_path.to_s, "rebase", "master")
             end

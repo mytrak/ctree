@@ -115,6 +115,16 @@ RSpec.describe Ctree::EnvCmd do
         .and output(/nothing to fix/).to_stdout
     end
 
+    it "applies source values to missing keys and keeps orphaned keys without prompting under force" do
+      write_env(@source / ".env", "NEW_KEY" => "src_val")
+      write_env(@target / ".env", "OLD_KEY" => "old_val")
+      expect(Ctree::Prompt).not_to receive(:read_line)
+      expect { Ctree::EnvCmd.run("fix", force: true) }.to raise_error(SystemExit)
+      env = Ctree::EnvFile.parse((@target / ".env").to_s)
+      expect(env["NEW_KEY"]).to eq("src_val")
+      expect(env).to have_key("OLD_KEY")
+    end
+
     it "does not prompt for keys already present in the worktree" do
       write_env(@source / ".env", "FOO" => "src_foo")
       write_env(@target / ".env", "FOO" => "wt_foo")
@@ -127,7 +137,7 @@ RSpec.describe Ctree::EnvCmd do
       write_env(@source / ".env", "NEW_KEY" => "src_val")
       write_env(@target / ".env", {})
       allow(Ctree::Prompt).to receive(:for_env_var_change)
-        .with("NEW_KEY", "src_val").and_return("src_val")
+        .with("NEW_KEY", "src_val", force: false).and_return("src_val")
       expect { Ctree::EnvCmd.run("fix") }.to raise_error(SystemExit)
       expect(Ctree::EnvFile.parse((@target / ".env").to_s)["NEW_KEY"]).to eq("src_val")
     end
@@ -136,7 +146,7 @@ RSpec.describe Ctree::EnvCmd do
       write_env(@source / ".env", "NEW_KEY" => "src_val")
       write_env(@target / ".env", {})
       allow(Ctree::Prompt).to receive(:for_env_var_change)
-        .with("NEW_KEY", "src_val").and_return("my_val")
+        .with("NEW_KEY", "src_val", force: false).and_return("my_val")
       expect { Ctree::EnvCmd.run("fix") }.to raise_error(SystemExit)
       expect(Ctree::EnvFile.parse((@target / ".env").to_s)["NEW_KEY"]).to eq("my_val")
     end
@@ -163,9 +173,9 @@ RSpec.describe Ctree::EnvCmd do
       write_env(@source / ".env", "FOO" => "bar", "SKIP_ME" => "x")
       write_env(@target / ".env", {})
       allow(Ctree::Prompt).to receive(:for_env_var_change)
-        .with("FOO", "bar").and_return("bar")
+        .with("FOO", "bar", force: false).and_return("bar")
       allow(Ctree::Prompt).to receive(:for_env_var_change)
-        .with("SKIP_ME", "x").and_return("x")
+        .with("SKIP_ME", "x", force: false).and_return("x")
       expect { Ctree::EnvCmd.run("fix") }.to raise_error(SystemExit)
     end
 

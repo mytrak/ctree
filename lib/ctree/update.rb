@@ -7,7 +7,7 @@ module Ctree
     # Runs from INSIDE a worktree. The worktree is a `git worktree` of the
     # source repo, so the source root is the parent of git's common dir. The
     # worktree's own .ctree config (on its branch) governs the update.
-    def run
+    def run(force: false)
       target_path = Pathname.pwd
       toplevel_out, _, status = Sh.capture3("git", "-C", target_path.to_s, "rev-parse", "--show-toplevel")
       Log.die "not inside a git repository" unless status.success?
@@ -75,9 +75,7 @@ module Ctree
       default_branch = detect_default_branch(source_root)
       if !src_branch.empty? && src_branch != default_branch
         Log.warn_ "source repo is on branch '#{src_branch}' (not '#{default_branch}')"
-        raw = Prompt.read_line("[#{PROG}] proceed with update? [y/N]: ")
-        answer = raw.to_s.gsub(/[\x00-\x1f\x7f]/, "").strip.downcase
-        unless answer == "y" || answer == "yes"
+        unless Prompt.confirm("proceed with update? [y/N]:", default: :no, force: force)
           Log.info "update aborted"
           exit 1
         end
@@ -91,9 +89,7 @@ module Ctree
       Log.die "docker ps failed" unless src_ps_st.success?
       unless src_ps_out.strip.empty?
         Log.warn_ "source compose stack has running containers"
-        raw = Prompt.read_line("[#{PROG}] stop source containers before updating? [Y/n]: ")
-        answer = raw.to_s.gsub(/[\x00-\x1f\x7f]/, "").strip.downcase
-        if answer.empty? || answer == "y" || answer == "yes"
+        if Prompt.confirm("stop source containers before updating? [Y/n]:", default: :yes, force: force)
           _, err, st = Spinner.with_spinner("stopping source compose stack") do
             Sh.capture3("docker", "compose", "-p", source_project, "down", chdir: source_root.to_s)
           end
