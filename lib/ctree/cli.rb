@@ -5,7 +5,7 @@ module Ctree
     module_function
 
     COMMANDS = [
-      ["create", "<worktree_name> <branch_name> [--config <path>]", "create a sibling worktree on a branch"],
+      ["create", "<worktree_name> <branch_name>", "create a sibling worktree on a branch"],
       ["delete", "<worktree_name>", "remove a worktree and its Docker resources"],
       ["list", "[all | free | used]", "list worktrees for the current source repo"],
       ["switch", "<worktree_name>", "change directory into a worktree"],
@@ -40,19 +40,11 @@ module Ctree
       Most commands run from the top of the source repository.
       `update`, `rebase`, `free`, `env`, and `compose-config` run from inside a worktree.
 
-      Pass --force with create, delete, free, rebase, update, env fix, config
-      add, or config delete to skip confirmation prompts and assume the default
-      answer shown in brackets (or "yes" for prompts that require typing "yes").
+      Pass --force with create, delete, free, rebase, update, env fix or config
+      add/delete to skip confirmation prompts and assume their default answer.
 
-      Pass --log-file=<path> with create, delete, rebase, or update to write
-      full command output to <path> instead of the console. The console shows
-      a single status line with a spinner while the command runs, replaced on
-      success by a past-tense completion line and elapsed time (e.g. "created
-      worktree wt1 (42s)"); on failure the console stays silent beyond
-      whatever already printed, matching the no-log-file behavior. --log-file
-      always implies --force (there is no console to prompt on while
-      logging), so confirmation prompts are skipped and their default
-      answers assumed, same as passing --force explicitly.
+      Pass --log-file=<path> or --log-file <path> with create, delete, rebase, or update
+      to write command output to <path> instead of the console. It also implies --force.
 
       Use "ctree help <command>" for more information about a command.
     USAGE
@@ -60,26 +52,23 @@ module Ctree
     HELP = {
       "create" => <<~HELP,
         Usage:
-          ctree create <worktree_name> <branch_name> [--config <path>]
+          ctree create <worktree_name> <branch_name>
 
         Creates a sibling worktree at ../<worktree_name> on <branch_name>. The entire
         source directory is cloned using copy-on-write (clonefile on macOS, cp --reflink
         on Linux). Docker volumes are replicated under the new compose project name and
         a tailored .env is written — prompting you to accept or change each value.
 
-        Optional --config <path> replaces the repo's .ctree/config.yml with a custom
-        config file for this worktree. The custom file is merged over the shipped
-        defaults and persisted into the worktree's .ctree/config.yml so that later
-        commands (update, rebase, etc.) continue to use it. Path is relative to the
-        current directory.
+        --config <path> or --config=<path> replaces the repo's .ctree/config.yml
+        with a custom config file for this worktree. The custom file is merged over
+        the shipped defaults and persisted into the worktree's .ctree/config.yml so
+        that later commands (update, rebase, etc.) continue to use it.
 
-        --force skips all confirmation prompts (assuming the bracket default, or
-        the shown value for per-var .env prompts) so create runs non-interactively.
+         --force skips all confirmation prompts (assuming the bracket default, or
+         the shown value for per-var .env prompts) so create runs non-interactively.
 
-        --log-file=<path> writes full output to <path> instead of the console,
-        which shows a spinner while the command runs and a past-tense
-        completion line (with elapsed time) on success. Implies --force
-        (prompts are skipped; defaults are assumed).
+         --log-file=<path> or --log-file <path> writes full output to <path> instead of
+         the console. Implies --force (prompts are skipped; defaults are assumed).
       HELP
       "delete" => <<~HELP,
         Usage:
@@ -90,12 +79,10 @@ module Ctree
         per-project Docker volumes, and any running compose stack. Branches are
         always preserved.
 
-        --force skips the confirmation prompt and proceeds with deletion.
+         --force skips the confirmation prompt and proceeds with deletion.
 
-        --log-file=<path> writes full output to <path> instead of the console,
-        which shows a spinner while the command runs and a past-tense
-        completion line (with elapsed time) on success. Implies --force
-        (prompts are skipped; defaults are assumed).
+         --log-file=<path> or --log-file <path> writes full output to <path> instead
+         of the console. Implies --force (prompts are skipped; defaults are assumed).
       HELP
       "switch" => <<~HELP,
         Usage:
@@ -123,15 +110,12 @@ module Ctree
         in the update config key. Warns and prompts before running if the source repo
         is on a non-default branch.
 
-        --force assumes the shown defaults for the prompts: the branch-mismatch
-        prompt defaults to *not* proceeding — so --force with a non-default source
-        branch will abort the update rather than forcing it through. The stop-source-
-        containers prompt defaults to yes and will run under --force.
+         --force assumes the shown defaults for the prompts: the branch-mismatch
+         prompt defaults to *not* proceeding — so --force with a non-default source
+         branch will abort the update rather than forcing it through.
 
-        --log-file=<path> writes full output to <path> instead of the console,
-        which shows a spinner while the command runs and a past-tense
-        completion line (with elapsed time) on success. Implies --force
-        (prompts are skipped; defaults are assumed).
+         --log-file=<path> or --log-file <path> writes full output to <path> instead
+         of the console. Implies --force (prompts are skipped; defaults are assumed).
       HELP
       "rebase" => <<~HELP,
         Usage:
@@ -146,14 +130,12 @@ module Ctree
         All operations are local — no network calls. Update the source repo first,
         then run `ctree rebase` from the worktree to catch it up.
 
-        --force assumes the shown default for the uncommitted-changes prompt,
-        which defaults to *not* proceeding — so --force will abort a rebase run
-        against a dirty worktree rather than forcing it through.
+         --force assumes the shown default for the uncommitted-changes prompt,
+         which defaults to *not* proceeding — so --force will abort a rebase run
+         against a dirty worktree rather than forcing it through.
 
-        --log-file=<path> writes full output to <path> instead of the console,
-        which shows a spinner while the command runs and a past-tense
-        completion line (with elapsed time) on success. Implies --force
-        (prompts are skipped; defaults are assumed).
+         --log-file=<path> or --log-file <path> writes full output to <path> instead
+         of the console. Implies --force (prompts are skipped; defaults are assumed).
       HELP
       "free" => <<~HELP,
         Usage:
@@ -290,12 +272,16 @@ module Ctree
         if a.start_with?("--log-file=")
           log_file = a.sub("--log-file=", "")
           true
+        elsif a == "--log-file" && argv.index(a) + 1 < argv.length && !argv[argv.index(a) + 1].start_with?("-")
+          # Extract the next element as the path and remove both --log-file and the path from argv
+          log_file = argv[argv.index(a) + 1]
+          argv.delete_at(argv.index(a) + 1)
+          true
         end
       end
 
-      # --log-file implies non-interactive: with no console visible while
-      # logging, there's nowhere to show a live prompt, so it always runs
-      # like --force.
+      # --log-file implies non-interactive: with no console visible while logging
+      # there's nowhere to show a live prompt, so it always runs like --force.
       force = true if log_file
 
       verb = argv[0]
@@ -317,6 +303,9 @@ module Ctree
       when "create"
         if argv.length == 3
           config_path = nil
+        elsif (idx = argv.index("--config="))
+          config_path = argv[idx].sub("--config=", "")
+          argv.delete_at(idx) # Clean up argv
         elsif argv.length == 5 && argv[3] == "--config"
           config_path = argv[4]
         else
