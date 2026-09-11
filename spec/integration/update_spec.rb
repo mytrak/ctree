@@ -186,6 +186,44 @@ RSpec.describe "Ctree::CLI update" do
     end
   end
 
+  it "writes full output to the log file and keeps the console minimal when --log-file is given" do
+    wt = @parent / "wt1"
+    system("git", "-C", @work.to_s, "worktree", "add", "-q", "-b", "wt1", wt.to_s,
+           out: File::NULL, err: File::NULL)
+    File.write((wt / ".env").to_s, "COMPOSE_PROJECT_NAME=wt1\n")
+
+    allow(Ctree::Prompt).to receive(:read_line).and_return("y")
+    stub_sh(
+      docker_system: [true],
+      docker_capture3: [
+        ["", "", true],
+        ["", "", true],
+        ["", "", true],
+        ["", "", true],
+      ]
+    )
+
+    Dir.mktmpdir do |log_dir|
+      log_path = File.join(log_dir, "ctree.log")
+
+      Dir.chdir(wt.to_s) do
+        console_output = capture_stdout do
+          expect { Ctree::CLI.run(["update", "--log-file=#{log_path}"]) }
+            .to raise_error(SystemExit) { |e| expect(e.status).to eq(0) }
+        end
+        expect(console_output).to include("updating worktree")
+        expect(console_output).to match(/updated worktree \(\d+s\)/)
+      end
+
+      expect(File.read(log_path)).to include("updated worktree")
+    end
+  ensure
+    if defined?(wt) && wt
+      system("git", "-C", @work.to_s, "worktree", "remove", "--force", wt.to_s,
+             out: File::NULL, err: File::NULL)
+    end
+  end
+
   it "rsyncs update directory from source to worktree" do
     FileUtils.mkdir_p((@work / ".ctree").to_s)
     File.write((@work / ".ctree" / "config.yml").to_s,

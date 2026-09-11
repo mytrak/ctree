@@ -65,6 +65,37 @@ RSpec.describe "Ctree::CLI delete" do
     FileUtils.rm_rf(target.to_s) if defined?(target) && target
   end
 
+  it "writes full output to the log file, skipping the interactive pre-confirmation listing entirely" do
+    target = @parent / "ghost"
+    FileUtils.mkdir_p(target.to_s)
+    File.write((target / "file.txt").to_s, "x")
+
+    expect(Ctree::Prompt).not_to receive(:read_line)
+    stub_sh(docker_capture3: [], docker_system: [false])
+
+    Dir.mktmpdir do |log_dir|
+      log_path = File.join(log_dir, "ctree.log")
+
+      console_output = capture_stdout do
+        expect { Ctree::CLI.run(["delete", "ghost", "--force", "--log-file=#{log_path}"]) }
+          .to raise_error(SystemExit) { |e| expect(e.status).to eq(0) }
+      end
+
+      log_output = File.read(log_path)
+      expect(log_output).not_to include("About to delete 'ghost':")
+      expect(log_output).not_to include("deletion complete for 'ghost'")
+      expect(console_output).not_to include("About to delete 'ghost':")
+      expect(console_output).to include("deleting worktree ghost")
+      expect(console_output).to match(/deleted worktree ghost \(\d+s\)/)
+      # Exactly the progress line and the completion line — no stray blank
+      # line in between (e.g. from delete.rb's final `puts` bypassing
+      # LogFile.enabled?).
+      expect(console_output).to match(/\A\[ctree\] deleting worktree ghost\n\[ctree\] deleted worktree ghost \(\d+s\)\n\z/)
+    end
+  ensure
+    FileUtils.rm_rf(target.to_s) if defined?(target) && target
+  end
+
   describe "speedups" do
     it "batches docker volume rm into a single call across all volumes" do
       target = @parent / "ghost"

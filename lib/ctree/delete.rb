@@ -114,48 +114,51 @@ module Ctree
       end
 
       # Show the user exactly what will happen.
-      puts
-      puts "[#{PROG}] About to delete '#{name}':"
-      puts
-      puts "  worktree path:  #{target_path}"
-      puts "    - dir:        #{target_path.exist? ? "EXISTS — will be deleted" : "absent"}"
-      puts "    - registered: #{worktree_registered ? "YES — will run `git worktree remove --force`" : "no"}"
-      puts
+      summary = []
+      summary << ""
+      summary << "[#{PROG}] About to delete '#{name}':"
+      summary << ""
+      summary << "  worktree path:  #{target_path}"
+      summary << "    - dir:        #{target_path.exist? ? "EXISTS — will be deleted" : "absent"}"
+      summary << "    - registered: #{worktree_registered ? "YES — will run `git worktree remove --force`" : "no"}"
+      summary << ""
       if branch_exists
-        puts "  git branch:     #{branch_to_check}  — preserved (run `git branch -D #{branch_to_check}` manually to delete)"
+        summary << "  git branch:     #{branch_to_check}  — preserved (run `git branch -D #{branch_to_check}` manually to delete)"
       else
-        puts "  git branch:     #{branch_to_check}  — not found"
+        summary << "  git branch:     #{branch_to_check}  — not found"
       end
-      puts
-      puts "  compose stack:  -p #{target_project}"
+      summary << ""
+      summary << "  compose stack:  -p #{target_project}"
       if containers.empty?
-        puts "    - containers: none running for this project"
+        summary << "    - containers: none running for this project"
       else
-        puts "    - containers (will be stopped and removed via `docker compose down`):"
-        containers.each { |c| puts "        #{c}" }
+        summary << "    - containers (will be stopped and removed via `docker compose down`):"
+        containers.each { |c| summary << "        #{c}" }
       end
-      puts
+      summary << ""
       if vols.empty?
-        puts "  docker volumes: none matching ^#{target_project}_"
+        summary << "  docker volumes: none matching ^#{target_project}_"
       else
-        puts "  docker volumes (#{vols.size}, all will be PERMANENTLY deleted):"
-        vols.each { |v| puts "        #{v}" }
+        summary << "  docker volumes (#{vols.size}, all will be PERMANENTLY deleted):"
+        vols.each { |v| summary << "        #{v}" }
       end
-      puts
+      summary << ""
       unless shared_external_vols.empty?
-        puts "  shared volumes (mounted from source via override yml; will NOT be touched):"
-        shared_external_vols.sort.each { |v| puts "        #{v}" }
-        puts
+        summary << "  shared volumes (mounted from source via override yml; will NOT be touched):"
+        shared_external_vols.sort.each { |v| summary << "        #{v}" }
+        summary << ""
       end
       if tagged_images.empty?
-        puts "  docker images:  no tags matching #{target_project}-*"
+        summary << "  docker images:  no tags matching #{target_project}-*"
       else
-        puts "  docker image tags (#{tagged_images.size}, tags will be deleted — image layers preserved):"
-        tagged_images.each { |img| puts "        #{img}" }
+        summary << "  docker image tags (#{tagged_images.size}, tags will be deleted — image layers preserved):"
+        tagged_images.each { |img| summary << "        #{img}" }
       end
-      puts
-      puts "  Source project (#{source_root}) will NOT be touched."
-      puts
+      summary << ""
+      summary << "  Source project (#{source_root}) will NOT be touched."
+      summary << ""
+
+      Log.section(summary.join("\n"), interactive: true, force: force)
 
       unless Prompt.confirm("Type 'yes' to confirm deletion of '#{name}':", default: nil, force: force)
         warn "[#{PROG}] aborted: confirmation not given. No changes made."
@@ -285,9 +288,8 @@ module Ctree
       # commits the user wants to keep, push, or merge later. To clean up
       # an orphan, run `git branch -D <name>` manually.
 
-      puts
+      puts unless LogFile.enabled?
       if failures.empty?
-        Log.info "deletion complete for '#{name}'"
         exit 0
       else
         Log.warn_ "removal completed with failures: #{failures.join(", ")}"

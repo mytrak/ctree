@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "stringio"
+
 RSpec.describe "Ctree::CLI create" do
   around do |ex|
     Dir.mktmpdir do |parent_dir|
@@ -81,6 +83,45 @@ RSpec.describe "Ctree::CLI create" do
     expect(env_content).to include("DB_PORT=5432")
     expect(env_content).not_to include("HOST_NAME_SUFFIX")
 
+    system("git", "-C", @work.to_s, "worktree", "remove", "--force", sibling.to_s,
+           out: File::NULL, err: File::NULL)
+  end
+
+  it "writes full output to the log file and keeps the console output minimal when --log-file is given" do
+    allow(Ctree::Prompt).to receive(:for_env_var_change) { |_key, value| value }
+    allow(Ctree::Prompt).to receive(:read_line).and_return("n")
+    stub_clonefile
+    stub_sh(docker_capture3: docker_stubs)
+
+    Dir.mktmpdir do |log_dir|
+      log_path = File.join(log_dir, "ctree.log")
+
+      out = StringIO.new
+      original_stdout = $stdout
+      $stdout = out
+      begin
+        expect {
+          Ctree::CLI.run(["create", "wt1", "wt1", "--log-file=#{log_path}"])
+        }.to raise_error(SystemExit) { |e| expect(e.status).to eq(0) }
+      ensure
+        $stdout = original_stdout
+      end
+
+      console_output = out.string
+      log_output = File.read(log_path)
+
+      expect(log_output).to include("created worktree wt1")
+      expect(log_output).to include("copied source content")
+      expect(console_output).not_to include("copied source content")
+      expect(console_output).to include("creating worktree wt1")
+      expect(console_output).to match(/created worktree wt1 \(\d+s\)/)
+      # Exactly the progress line and the completion line — no stray blank
+      # line in between (e.g. from a raw `puts` bypassing LogFile.enabled?,
+      # such as create.rb's promptable-.env-vars spacer).
+      expect(console_output).to match(/\A\[ctree\] creating worktree wt1\n\[ctree\] created worktree wt1 \(\d+s\)\n\z/)
+    end
+
+    sibling = @work.parent / "wt1"
     system("git", "-C", @work.to_s, "worktree", "remove", "--force", sibling.to_s,
            out: File::NULL, err: File::NULL)
   end

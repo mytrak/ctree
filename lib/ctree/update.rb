@@ -302,34 +302,37 @@ module Ctree
       end
 
       if Log.debug?
-        puts
-        puts "=== ctree update summary ==="
-        puts "worktree:  #{target_path}"
+        lines = []
+        lines << ""
+        lines << "=== ctree update summary ==="
+        lines << "worktree:  #{target_path}"
 
         if sync_results.any?
-          puts "volumes:"
+          lines << "volumes:"
           sync_results.each do |src, tgt, st, msg|
             line = "  [#{st.to_s.ljust(7)}] #{src}  ->  #{tgt}"
             line += "  (#{msg})" unless msg.to_s.empty?
-            puts line
+            lines << line
           end
         end
 
         if sync_file_results.any?
-          puts "files/dirs:"
+          lines << "files/dirs:"
           sync_file_results.each do |rel, st, msg|
             line = "  [#{st.to_s.ljust(7)}] #{rel}"
             line += "  (#{msg})" unless msg.to_s.empty?
-            puts line
+            lines << line
           end
         end
 
         if post_update_hooks.any?
-          puts "post-update hooks:"
+          lines << "post-update hooks:"
           post_update_hooks.each do |cmd|
-            puts "  [ran    ] #{cmd}"
+            lines << "  [ran    ] #{cmd}"
           end
         end
+
+        Log.section(lines.join("\n"))
       end
 
       exit(failed ? 2 : 0)
