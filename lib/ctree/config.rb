@@ -69,14 +69,12 @@ module Ctree
     # Scaffolds <repo_top>/.ctree/config.yml from the shipped template so the
     # repo has an annotated, committable per-repo config. Must be run inside a
     # git repository; refuses to clobber an existing file without confirmation.
-    def add_local!
+    def add_local!(force: false)
       top = repo_top_or_die
       dir = top / ".ctree"
       target = dir / "config.yml"
       if target.exist?
-        raw = Prompt.read_line("[#{PROG}] Config file exists: #{target}. Reset it? [y/N]: ")
-        answer = raw.to_s.gsub(/[\x00-\x1f\x7f]/, "").strip.downcase
-        unless answer == "y" || answer == "yes"
+        unless Prompt.confirm("Config file exists: #{target}. Reset it? [y/N]:", default: :no, force: force)
           Log.info "keeping existing config"
           return
         end
@@ -92,7 +90,7 @@ module Ctree
     # Removes <repo_top>/.ctree/config.yml and the .ctree directory. Must be
     # run inside a git repository. If .ctree holds files other than config.yml,
     # the directory is kept (we don't delete content ctree didn't create).
-    def remove_local!
+    def remove_local!(force: false)
       top = repo_top_or_die
       dir = top / ".ctree"
       target = dir / "config.yml"
@@ -105,9 +103,7 @@ module Ctree
       puts "  #{target}"
       puts "  #{dir}/  (if empty after removing the config)"
       puts
-      raw = Prompt.read_line("[#{PROG}] Type 'yes' to confirm removal: ")
-      answer = raw.to_s.gsub(/[\x00-\x1f\x7f]/, "").strip
-      unless answer == "yes"
+      unless Prompt.confirm("Type 'yes' to confirm removal:", default: nil, force: force)
         Log.info "aborted — config file kept"
         return
       end

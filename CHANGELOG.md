@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-10
+
+- Added an option to redirect command output to a log file
+- Removed interactive prompts from log in non-interactive mode
+- Added an option to run commands non-interactively
+
 ## [0.2.0] - 2026-08-20
 
 - Prevented creation of duplicate volumes for shared volumes

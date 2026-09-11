@@ -110,15 +110,38 @@ RSpec.describe Ctree::CLI do
     it "accepts --config <path> and passes config_path to Create.run" do
       Ctree::CLI.run(["create", "wt1", "branch1", "--config", "/tmp/my_config.yml"])
       expect(Ctree::Create).to have_received(:run).with(
-        name: "wt1", branch: "branch1", config_path: "/tmp/my_config.yml"
+        name: "wt1", branch: "branch1", config_path: "/tmp/my_config.yml", force: false
       )
     end
 
     it "passes config_path: nil when --config is not given" do
       Ctree::CLI.run(["create", "wt1", "branch1"])
       expect(Ctree::Create).to have_received(:run).with(
-        name: "wt1", branch: "branch1", config_path: nil
+        name: "wt1", branch: "branch1", config_path: nil, force: false
       )
+    end
+
+    it "strips --force from argv regardless of position and passes force: true" do
+      Ctree::CLI.run(["create", "wt1", "branch1", "--force"])
+      expect(Ctree::Create).to have_received(:run).with(
+        name: "wt1", branch: "branch1", config_path: nil, force: true
+      )
+      Ctree::CLI.run(["--force", "create", "wt2", "branch2"])
+      expect(Ctree::Create).to have_received(:run).with(
+        name: "wt2", branch: "branch2", config_path: nil, force: true
+      )
+    end
+
+    it "strips --log-file=PATH from argv and implies force: true even without --force" do
+      Dir.mktmpdir do |dir|
+        log_path = File.join(dir, "ctree.log")
+        Ctree::CLI.run(["create", "wt1", "branch1", "--log-file=#{log_path}"])
+        expect(Ctree::Create).to have_received(:run).with(
+          name: "wt1", branch: "branch1", config_path: nil, force: true
+        )
+      end
+    ensure
+      Ctree::LogFile.reset!
     end
 
     it "exits when --config flag is given but no path follows" do
@@ -144,6 +167,74 @@ RSpec.describe Ctree::CLI do
         Ctree::CLI.run(["create", "BAD NAME", "branch1", "--config", "/tmp/x.yml"])
       }.to raise_error(SystemExit) { |e| expect(e.status).to eq(1) }
         .and output(/invalid name 'BAD NAME'/).to_stderr
+    end
+  end
+
+  describe "--log-file validation" do
+    it "errors when --log-file is passed to a command that doesn't support it" do
+      expect {
+        Ctree::CLI.run(["list", "--log-file=/tmp/ctree.log"])
+      }.to raise_error(SystemExit) { |e| expect(e.status).to eq(1) }
+        .and output(/--log-file is only supported for create, delete, rebase, update/).to_stderr
+    end
+
+    it "errors when --log-file is given without a path" do
+      expect {
+        Ctree::CLI.run(["create", "wt1", "branch1", "--log-file="])
+      }.to raise_error(SystemExit) { |e| expect(e.status).to eq(1) }
+        .and output(/--log-file requires a path/).to_stderr
+    end
+
+    it "errors when the log file's parent directory doesn't exist" do
+      expect {
+        Ctree::CLI.run(["create", "wt1", "branch1", "--log-file=/no/such/dir/ctree.log"])
+      }.to raise_error(SystemExit) { |e| expect(e.status).to eq(1) }
+        .and output(/parent directory does not exist or is not writable/).to_stderr
+    end
+  end
+
+  describe ".with_logging" do
+    after { Ctree::LogFile.reset! }
+
+    def capture_stdout
+      original = $stdout
+      $stdout = StringIO.new
+      yield
+      $stdout.string
+    ensure
+      $stdout = original
+    end
+
+    it "replaces the progress line with the past-tense done message and elapsed time on success" do
+      Dir.mktmpdir do |dir|
+        log_path = File.join(dir, "ctree.log")
+        output = capture_stdout do
+          expect { Ctree::CLI.with_logging(log_path, "doing thing", "did thing") { exit 0 } }
+            .to raise_error(SystemExit) { |e| expect(e.status).to eq(0) }
+        end
+        expect(output).to match(/did thing \(\d+s\)/)
+      end
+    end
+
+    it "prints no extra console line when the block exits non-zero — same as without --log-file" do
+      Dir.mktmpdir do |dir|
+        log_path = File.join(dir, "ctree.log")
+        output = capture_stdout do
+          expect { Ctree::CLI.with_logging(log_path, "doing thing", "did thing") { exit 2 } }
+            .to raise_error(SystemExit) { |e| expect(e.status).to eq(2) }
+        end
+        expect(output).not_to include("did thing")
+      end
+    end
+
+    it "still surfaces the SystemExit status from the block" do
+      Dir.mktmpdir do |dir|
+        log_path = File.join(dir, "ctree.log")
+        capture_stdout do
+          expect { Ctree::CLI.with_logging(log_path, "doing thing", "did thing") { Ctree::Log.die("boom") } }
+            .to raise_error(SystemExit) { |e| expect(e.status).to eq(1) }
+        end
+      end
     end
   end
 end

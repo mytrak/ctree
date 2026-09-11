@@ -37,21 +37,166 @@ module Ctree
     end
 
     def debug(msg)
-      puts "[#{PROG}] #{msg}" if @debug
+      return unless @debug
+      if LogFile.enabled?
+        LogFile.write("DEBUG: #{msg}")
+      else
+        puts "[#{PROG}] #{msg}"
+      end
     end
 
     def info(msg)
-      puts "[#{PROG}] #{msg}"
+      if LogFile.enabled?
+        LogFile.write(msg)
+      else
+        puts "[#{PROG}] #{msg}"
+      end
     end
 
     def warn_(msg)
-      warn "[#{PROG}] WARNING: #{msg}"
+      if LogFile.enabled?
+        LogFile.write("WARNING: #{msg}")
+      else
+        warn "[#{PROG}] WARNING: #{msg}"
+      end
     end
 
     def die(msg, code = 1)
-      warn "[#{PROG}] ERROR: #{msg}"
+      if LogFile.enabled?
+        LogFile.write("ERROR: #{msg}")
+        Scroller.stop
+        warn "[#{PROG}] ERROR: #{msg} (see #{LogFile.path} for details)"
+      else
+        warn "[#{PROG}] ERROR: #{msg}"
+      end
       exit code
     end
+
+    # `interactive: true` marks content that exists only to precede a
+    # confirmation prompt (e.g. delete's listing) — skipped from the log
+    # file entirely once forced, since it's never shown and is redundant.
+    def section(text, interactive: false, force: false)
+      if LogFile.enabled?
+        LogFile.write_block(text) unless interactive && force
+        if interactive && !force
+          Scroller.pause
+          puts text
+        end
+      else
+        puts text
+      end
+    end
+  end
+
+  module LogFile
+    module_function
+
+    def configure(path)
+      @path = path
+      File.write(@path, "")
+    end
+
+    def enabled?
+      !@path.nil?
+    end
+
+    def path
+      @path
+    end
+
+    def write(msg)
+      return unless enabled?
+      ts = Time.now.strftime("%Y-%m-%d %H:%M:%S")
+      File.open(@path, "a") { |f| f.puts("[#{ts}] #{msg}") }
+    end
+
+    # For one multi-line announcement (e.g. a static listing) that belongs to
+    # a single moment in time: timestamps only the first non-blank line and
+    # writes the rest as-is, instead of repeating a near-identical timestamp
+    # on every line.
+    def write_block(text)
+      return unless enabled?
+      lines = text.each_line(chomp: true).to_a
+      lines.shift while lines.first == ""
+      return if lines.empty?
+      ts = Time.now.strftime("%Y-%m-%d %H:%M:%S")
+      File.open(@path, "a") do |f|
+        f.puts("[#{ts}] #{lines.shift}")
+        lines.each { |line| f.puts(line) }
+      end
+    end
+
+    # Test-only: specs run in one process, so state must be reset between
+    # examples.
+    def reset!
+      @path = nil
+    end
+  end
+
+  module Scroller
+    module_function
+
+    def start(msg)
+      @prefix = "[#{PROG}] #{msg}"
+      @start_time = Time.now
+      @mutex = Mutex.new
+      @paused = false
+      @stopped = false
+      if $stdout.tty?
+        @thread = Thread.new { render_loop }
+      else
+        @thread = nil
+        puts @prefix
+      end
+    end
+
+    def pause
+      return unless @thread
+      @mutex.synchronize { @paused = true }
+      print "\r\e[K"
+      $stdout.flush
+    end
+
+    def resume
+      return unless @thread
+      @mutex.synchronize { @paused = false }
+    end
+
+    # Ends the scroller. With no args, just clears the animated line (or is
+    # a no-op if nothing was ever started). With `final_message`, replaces
+    # that line — same in-place-overwrite trick `Spinner.with_spinner`'s
+    # callers use — with a past-tense completion line and elapsed time.
+    def stop(final_message = nil)
+      elapsed = @start_time && (Time.now - @start_time).to_i
+      if @thread
+        @mutex.synchronize { @stopped = true }
+        @thread.join
+        @thread = nil
+        print "\r\e[K"
+      end
+      if final_message
+        suffix = elapsed ? " (#{elapsed}s)" : ""
+        puts "[#{PROG}] #{final_message}#{suffix}"
+      end
+      $stdout.flush
+    end
+
+    def render_loop
+      idx = 0
+      until @mutex.synchronize { @stopped }
+        unless @mutex.synchronize { @paused }
+          elapsed = (Time.now - @start_time).to_i
+          line = format("%s (%s) %ds", @prefix,
+                        SPINNER_FRAMES[idx % SPINNER_FRAMES.length], elapsed)
+          print "\r\e[K#{line}"
+          $stdout.flush
+          idx += 1
+        end
+        sleep 0.1
+      end
+    end
+
+    private_class_method :render_loop
   end
 
   # Single seam for shelling out. Integration tests stub these.
@@ -169,6 +314,10 @@ module Ctree
     module_function
 
     def with_spinner(msg)
+      # msg is a present-tense progress label; skip it under --log-file so
+      # the file only ever gets each call site's past-tense completion line.
+      return yield if LogFile.enabled?
+
       prefix = "[#{PROG}] #{msg}"
       unless $stdout.tty?
         puts prefix
@@ -208,6 +357,7 @@ module Ctree
     end
 
     def render_progress(current, total, start_time, spinner)
+      return if LogFile.enabled?
       return unless $stdout.tty?
       elapsed = (Time.now - start_time).to_i
       if total && total > 0
@@ -240,41 +390,76 @@ module Ctree
       end
     end
 
-    def for_db_port_change(current_port)
-      loop do
-        prompt = "[#{PROG}] DB_PORT=#{current_port}. Press enter to keep, or type a new port: "
-        raw = read_line(prompt)
-        return current_port if raw.nil?
+    # Centralized yes/no confirmation. `default` is :yes, :no, or nil (no
+    # bracketed default — the prompt text must ask the user to type "yes").
+    # Under force: true, skips stdin and returns the assumed answer silently.
+    def confirm(message, default:, force: false)
+      return default == :yes || default.nil? if force
 
-        answer = raw.gsub(/[\x00-\x1f\x7f]/, "").strip
-        return current_port if answer.empty?
-
-        unless answer =~ /\A\d+\z/
-          Log.warn_ "#{answer.inspect} is not a valid port; please enter digits only (1-65535)"
-          next
-        end
-        port = answer.to_i
-        unless port.between?(1, 65_535)
-          Log.warn_ "port #{port} is out of range; must be 1-65535"
-          next
-        end
-        return port.to_s
+      logging = LogFile.enabled?
+      if logging
+        Scroller.pause
+        LogFile.write("PROMPT: #{message}")
       end
+
+      raw = read_line("[#{PROG}] #{message} ")
+      result = if default.nil?
+        raw.to_s.gsub(/[\x00-\x1f\x7f]/, "").strip == "yes"
+      else
+        answer = raw.to_s.gsub(/[\x00-\x1f\x7f]/, "").strip.downcase
+        if default == :yes
+          answer.empty? || answer == "y" || answer == "yes"
+        else
+          answer == "y" || answer == "yes"
+        end
+      end
+
+      if logging
+        answer_note = raw.to_s.empty? ? "(empty, default)" : raw
+        LogFile.write("ANSWER: #{answer_note} -> #{result ? "yes" : "no"}")
+        Scroller.resume
+      end
+
+      result
     end
 
     # Generic prompt for any .env variable. Prints key=value as a log line
     # then prompts on a short second line — avoids Readline redraw artifacts
     # caused by prompts longer than the terminal width.
-    def for_env_var_change(key, current_value, worktree_values: {})
-      puts "[#{PROG}] #{key}=#{current_value}"
+    def for_env_var_change(key, current_value, worktree_values: {}, force: false)
+      console_header = ["[#{PROG}] #{key}=#{current_value}"]
       if worktree_values.any?
         pad = worktree_values.keys.map(&:length).max
-        worktree_values.each { |wt, val| puts "  #{wt.ljust(pad)}: #{val}" }
+        worktree_values.each { |wt, val| console_header << "  #{wt.ljust(pad)}: #{val}" }
       end
+
+      logging = LogFile.enabled?
+      if logging
+        return current_value if force
+        sibling_note = worktree_values.any? ? " (worktree values: #{worktree_values.map { |wt, val| "#{wt}=#{val}" }.join(", ")})" : ""
+        Scroller.pause
+        puts console_header.join("\n")
+        LogFile.write("PROMPT: #{key}=#{current_value}#{sibling_note} (enter to keep, or type a new value):")
+      else
+        puts console_header.join("\n")
+        return current_value if force
+      end
+
       raw = read_line("  (enter to keep, or type a new value): ")
-      return current_value if raw.nil?
-      answer = raw.gsub(/[\x00-\x1f\x7f]/, "").strip
-      answer.empty? ? current_value : answer
+      result = if raw.nil?
+        current_value
+      else
+        answer = raw.gsub(/[\x00-\x1f\x7f]/, "").strip
+        answer.empty? ? current_value : answer
+      end
+
+      if logging
+        answer_note = raw.to_s.empty? ? "(empty, kept #{result})" : result
+        LogFile.write("ANSWER: #{answer_note}")
+        Scroller.resume
+      end
+
+      result
     end
   end
 
@@ -329,7 +514,8 @@ module Ctree
       state_mutex = Mutex.new
       done = false
 
-      Log.debug "copying #{src_vol} -> #{tgt_vol}" unless $stdout.tty?
+      live_progress = $stdout.tty? && !LogFile.enabled?
+      Log.debug "copying #{src_vol} -> #{tgt_vol}" unless live_progress
 
       Sh.popen3(*cmd) do |_stdin, stdout, stderr, wait_thr|
         err_thread = Thread.new { err_buf << stderr.read.to_s }
@@ -340,7 +526,7 @@ module Ctree
             cur, tot = state_mutex.synchronize { [current_bytes, total_bytes] }
             elapsed = (Time.now - start_time).to_i
             pct = (tot && tot > 0) ? [(cur.to_f / tot * 100).round, 100].min : 0
-            if $stdout.tty?
+            if live_progress
               print format("\r\e[K[ctree] copying %s -> %s %d%% (%s) %ds",
                            src_vol, tgt_vol, pct,
                            SPINNER_FRAMES[spinner_idx % SPINNER_FRAMES.length], elapsed)
@@ -366,7 +552,7 @@ module Ctree
         exit_status = wait_thr.value
       end
 
-      if $stdout.tty?
+      if live_progress
         print "\r\e[K"
         $stdout.flush
       end

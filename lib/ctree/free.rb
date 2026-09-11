@@ -6,7 +6,7 @@ module Ctree
   module Free
     module_function
 
-    def run
+    def run(force: false)
       target_path = Pathname.pwd
       toplevel_out, _, status = Sh.capture3("git", "-C", target_path.to_s, "rev-parse", "--show-toplevel")
       Log.die "not inside a git repository" unless status.success?
@@ -36,9 +36,7 @@ module Ctree
         exit 0
       end
 
-      raw = Prompt.read_line("[#{PROG}] Free this worktree? [Y/n]: ")
-      answer = raw.to_s.gsub(/[\x00-\x1f\x7f]/, "").strip.downcase
-      unless answer.empty? || answer == "y" || answer == "yes"
+      unless Prompt.confirm("Free this worktree? [Y/n]:", default: :yes, force: force)
         Log.info "aborted"
         exit 0
       end

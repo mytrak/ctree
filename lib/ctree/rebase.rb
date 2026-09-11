@@ -11,7 +11,7 @@ module Ctree
     # All operations are local — no network calls. The source is the authority:
     # rebase the source repo first, then run `ctree rebase` from the worktree
     # to catch it up.
-    def run
+    def run(force: false)
       target_path = Pathname.pwd
       toplevel_out, _, status = Sh.capture3("git", "-C", target_path.to_s, "rev-parse", "--show-toplevel")
       Log.die "not inside a git repository" unless status.success?
@@ -55,9 +55,7 @@ module Ctree
       unless dirty.empty?
         Log.warn_ "uncommitted changes in:"
         dirty.each { |d| Log.warn_ "  #{d}" }
-        raw = Prompt.read_line("[#{PROG}] proceed anyway? [y/N]: ")
-        answer = raw.to_s.gsub(/[\x00-\x1f\x7f]/, "").strip.downcase
-        unless answer == "y" || answer == "yes"
+        unless Prompt.confirm("proceed anyway? [y/N]:", default: :no, force: force)
           Log.info "rebase aborted"
           exit 1
         end
@@ -112,14 +110,16 @@ module Ctree
       end
 
       if Log.debug?
-        puts
-        puts "=== ctree rebase summary ==="
+        lines = []
+        lines << ""
+        lines << "=== ctree rebase summary ==="
         results.each do |status, name, msg|
           line = "  [#{status.to_s.ljust(7)}] #{name}"
           line += "  (#{msg})" unless msg.empty?
-          puts line
+          lines << line
         end
-        puts
+        lines << ""
+        Log.section(lines.join("\n"))
       end
 
       failed = results.any? { |st, _, _| st == :failed }

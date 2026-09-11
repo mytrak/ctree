@@ -76,6 +76,24 @@ RSpec.describe "Ctree::CLI config add / remove" do
     expect(Dir).not_to exist(@target.dirname.to_s)
   end
 
+  it "config add --force keeps an existing config (reset prompt defaults to no)" do
+    FileUtils.mkdir_p(@target.dirname.to_s)
+    @target.write("existing: content\n")
+    expect(Ctree::Prompt).not_to receive(:read_line)
+    expect {
+      Ctree::CLI.run(["config", "add", "--force"])
+    }.to output(/keeping existing config/).to_stdout
+    expect(@target.read).to eq("existing: content\n")
+  end
+
+  it "config delete --force removes the file and directory without prompting" do
+    Ctree::CLI.run(["config", "add"])
+    expect(Ctree::Prompt).not_to receive(:read_line)
+    Ctree::CLI.run(["config", "delete", "--force"])
+    expect(File).not_to exist(@target.to_s)
+    expect(Dir).not_to exist(@target.dirname.to_s)
+  end
+
   it "config delete aborts unless the user types 'yes'" do
     Ctree::CLI.run(["config", "add"])
     allow(Ctree::Prompt).to receive(:read_line).and_return("y")
