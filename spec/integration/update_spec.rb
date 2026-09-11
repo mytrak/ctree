@@ -134,7 +134,6 @@ RSpec.describe "Ctree::CLI update" do
       expect {
         Ctree::CLI.run(["update", "--force"])
       }.to output(/source repo is on branch 'feature-x'/).to_stderr
-        .and output(/proceed with update\?.*no \(--force\)/).to_stdout
         .and raise_error(SystemExit) { |e| expect(e.status).to eq(1) }
     end
   ensure

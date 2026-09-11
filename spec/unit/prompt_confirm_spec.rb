@@ -6,7 +6,7 @@ RSpec.describe Ctree::Prompt do
       expect(Ctree::Prompt).not_to receive(:read_line)
       result = nil
       expect { result = Ctree::Prompt.confirm("proceed?", default: :yes, force: true) }
-        .to output(/\A\[ctree\] proceed\? yes \(--force\)\n\z/).to_stdout
+        .to output("").to_stdout
       expect(result).to eq(true)
     end
 
@@ -14,7 +14,7 @@ RSpec.describe Ctree::Prompt do
       expect(Ctree::Prompt).not_to receive(:read_line)
       result = nil
       expect { result = Ctree::Prompt.confirm("proceed?", default: :no, force: true) }
-        .to output(/\A\[ctree\] proceed\? no \(--force\)\n\z/).to_stdout
+        .to output("").to_stdout
       expect(result).to eq(false)
     end
 
@@ -22,7 +22,7 @@ RSpec.describe Ctree::Prompt do
       expect(Ctree::Prompt).not_to receive(:read_line)
       result = nil
       expect { result = Ctree::Prompt.confirm("Type 'yes' to confirm:", default: nil, force: true) }
-        .to output(/\A\[ctree\] Type 'yes' to confirm: yes \(--force\)\n\z/).to_stdout
+        .to output("").to_stdout
       expect(result).to eq(true)
     end
 
