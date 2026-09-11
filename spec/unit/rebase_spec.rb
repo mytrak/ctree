@@ -71,7 +71,6 @@ RSpec.describe "Ctree::Rebase uncommitted-changes prompt and --force" do
     expect {
       Ctree::Rebase.run(force: true)
     }.to raise_error(SystemExit) { |e| expect(e.status).to eq(1) }
-      .and output(/proceed anyway\?.*no \(--force\)/).to_stdout
   end
 
   it "still prompts interactively when a dirty worktree is not forced" do

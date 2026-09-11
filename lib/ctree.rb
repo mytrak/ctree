@@ -241,15 +241,10 @@ module Ctree
     end
 
     # Centralized yes/no confirmation. `default` is :yes, :no, or nil (no
-    # bracketed default — the prompt text itself must ask the user to type
-    # the literal word "yes"). Under force: true, skips stdin and returns
-    # the assumed answer, logging one line so --force runs stay legible.
+    # bracketed default — the prompt text must ask the user to type "yes").
+    # Under force: true, skips stdin and returns the assumed answer silently.
     def confirm(message, default:, force: false)
-      if force
-        assumed = default == :yes || default.nil?
-        Log.info "#{message} #{assumed ? "yes" : "no"} (--force)"
-        return assumed
-      end
+      return default == :yes || default.nil? if force
 
       raw = read_line("[#{PROG}] #{message} ")
       if default.nil?
