@@ -44,6 +44,16 @@ module Ctree
       add, or config delete to skip confirmation prompts and assume the default
       answer shown in brackets (or "yes" for prompts that require typing "yes").
 
+      Pass --log-file=<path> with create, delete, rebase, or update to write
+      full command output to <path> instead of the console. The console shows
+      a single status line with a spinner while the command runs, replaced on
+      success by a past-tense completion line and elapsed time (e.g. "created
+      worktree wt1 (42s)"); on failure the console stays silent beyond
+      whatever already printed, matching the no-log-file behavior. --log-file
+      always implies --force (there is no console to prompt on while
+      logging), so confirmation prompts are skipped and their default
+      answers assumed, same as passing --force explicitly.
+
       Use "ctree help <command>" for more information about a command.
     USAGE
 
@@ -65,6 +75,11 @@ module Ctree
 
         --force skips all confirmation prompts (assuming the bracket default, or
         the shown value for per-var .env prompts) so create runs non-interactively.
+
+        --log-file=<path> writes full output to <path> instead of the console,
+        which shows a spinner while the command runs and a past-tense
+        completion line (with elapsed time) on success. Implies --force
+        (prompts are skipped; defaults are assumed).
       HELP
       "delete" => <<~HELP,
         Usage:
@@ -76,6 +91,11 @@ module Ctree
         always preserved.
 
         --force skips the confirmation prompt and proceeds with deletion.
+
+        --log-file=<path> writes full output to <path> instead of the console,
+        which shows a spinner while the command runs and a past-tense
+        completion line (with elapsed time) on success. Implies --force
+        (prompts are skipped; defaults are assumed).
       HELP
       "switch" => <<~HELP,
         Usage:
@@ -107,6 +127,11 @@ module Ctree
         prompt defaults to *not* proceeding — so --force with a non-default source
         branch will abort the update rather than forcing it through. The stop-source-
         containers prompt defaults to yes and will run under --force.
+
+        --log-file=<path> writes full output to <path> instead of the console,
+        which shows a spinner while the command runs and a past-tense
+        completion line (with elapsed time) on success. Implies --force
+        (prompts are skipped; defaults are assumed).
       HELP
       "rebase" => <<~HELP,
         Usage:
@@ -124,6 +149,11 @@ module Ctree
         --force assumes the shown default for the uncommitted-changes prompt,
         which defaults to *not* proceeding — so --force will abort a rebase run
         against a dirty worktree rather than forcing it through.
+
+        --log-file=<path> writes full output to <path> instead of the console,
+        which shows a spinner while the command runs and a past-tense
+        completion line (with elapsed time) on success. Implies --force
+        (prompts are skipped; defaults are assumed).
       HELP
       "free" => <<~HELP,
         Usage:
@@ -226,13 +256,61 @@ module Ctree
       "#{base} — try '#{suggestion}'"
     end
 
+    LOG_FILE_COMMANDS = %w[create delete rebase update].freeze
+
+    # Wraps a create/delete/rebase/update invocation when --log-file was
+    # given: redirects Log/Prompt/Spinner output to the file and shows a
+    # single status line + spinner on the console, replaced on success by
+    # `done_message` + elapsed time — same present/past-tense swap pattern
+    # `Spinner.with_spinner` uses for individual steps. On failure, stays
+    # silent (matches the no-log-file behavior, where these paths signal
+    # failure only via already-streamed Log.warn_/Log.die lines and the
+    # exit code). A no-op passthrough when log_file is nil.
+    def with_logging(log_file, progress_message, done_message)
+      return yield unless log_file
+
+      LogFile.configure(log_file)
+      Scroller.start(progress_message)
+      begin
+        yield
+      ensure
+        status = $!.is_a?(SystemExit) ? $!.status : ($! ? 1 : 0)
+        Scroller.stop(status.zero? ? done_message : nil)
+      end
+    end
+
     def run(argv)
       usage_and_exit if argv.empty?
 
       force = argv.include?("--force")
       argv = argv.reject { |a| a == "--force" }
 
+      log_file = nil
+      argv = argv.reject do |a|
+        if a.start_with?("--log-file=")
+          log_file = a.sub("--log-file=", "")
+          true
+        end
+      end
+
+      # --log-file implies non-interactive: with no console visible while
+      # logging, there's nowhere to show a live prompt, so it always runs
+      # like --force.
+      force = true if log_file
+
       verb = argv[0]
+
+      if log_file
+        Log.die "--log-file requires a path, e.g. --log-file=/tmp/ctree.log" if log_file.empty?
+        unless LOG_FILE_COMMANDS.include?(verb)
+          Log.die "--log-file is only supported for #{LOG_FILE_COMMANDS.join(", ")}"
+        end
+        parent = File.dirname(File.expand_path(log_file))
+        unless File.directory?(parent) && File.writable?(parent)
+          Log.die "--log-file parent directory does not exist or is not writable: #{parent}"
+        end
+      end
+
       case verb
       when "version"
         puts "ctree #{VERSION}"
@@ -250,12 +328,16 @@ module Ctree
         if branch_arg !~ BRANCH_NAME_PATTERN
           Log.die "invalid branch name '#{branch_arg}'; must match #{BRANCH_NAME_PATTERN.inspect}"
         end
-        Create.run(name: name, branch: branch_arg, config_path: config_path, force: force)
+        with_logging(log_file, "creating worktree #{name}", "created worktree #{name}") do
+          Create.run(name: name, branch: branch_arg, config_path: config_path, force: force)
+        end
       when "delete"
         usage_and_exit if argv.length != 2
         name = argv[1]
         Log.die invalid_name_message(name) unless name =~ NAME_PATTERN
-        Delete.run(name: name, force: force)
+        with_logging(log_file, "deleting worktree #{name}", "deleted worktree #{name}") do
+          Delete.run(name: name, force: force)
+        end
       when "switch"
         usage_and_exit if argv.length != 2
         name = argv[1]
@@ -263,7 +345,9 @@ module Ctree
         Switch.run(name: name)
       when "update"
         usage_and_exit unless argv.length == 1
-        Update.run(force: force)
+        with_logging(log_file, "updating worktree", "updated worktree") do
+          Update.run(force: force)
+        end
       when "free"
         usage_and_exit unless argv.length == 1
         Free.run(force: force)
@@ -279,7 +363,9 @@ module Ctree
         ComposeConfigCmd.run(subcommand)
       when "rebase"
         usage_and_exit unless argv.length == 1
-        Rebase.run(force: force)
+        with_logging(log_file, "rebasing worktree", "rebased worktree") do
+          Rebase.run(force: force)
+        end
       when "shell-init"
         usage_and_exit unless argv.length == 1
         ShellInit.run

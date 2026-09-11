@@ -160,7 +160,7 @@ module Ctree
       # On non-TTY the spinner doesn't run, so log the start explicitly.
       # On TTY the spinner itself is the start indicator — skip the static line
       # to avoid showing both "copying source content" and the spinner line.
-      Log.debug "copying source content" unless $stdout.tty?
+      Log.debug "copying source content" unless $stdout.tty? && !LogFile.enabled?
 
       state_mutex = Mutex.new
       done_count = 0
@@ -176,7 +176,7 @@ module Ctree
         source_size_bytes = out.lines.sum { |l| l.split("\t").first.to_i } * 1024 if st.success?
       end
 
-      render_thread = if $stdout.tty?
+      render_thread = if $stdout.tty? && !LogFile.enabled?
         Thread.new do
           spinner_idx = 0
           until state_mutex.synchronize { clone_done }
@@ -617,7 +617,7 @@ module Ctree
       end
 
       unless promptable.empty?
-        puts
+        puts unless LogFile.enabled?
         promptable.each do |key, value|
           worktree_values = sibling_envs.filter_map { |wt, env| [wt, env[key]] if env[key] }.to_h
           new_value = Prompt.for_env_var_change(key, value, worktree_values: worktree_values, force: force)
@@ -637,17 +637,18 @@ module Ctree
       # === final report ===
 
       if Log.debug?
-        puts
-        puts "=== ctree summary ==="
-        puts "worktree:  #{target_path}"
-        puts "branch:    #{branch}#{branch_exists ? " (existing, checked out)" : " (new)"}"
-        puts "#{env_filename}:      #{tgt_env_path}"
-        final_env_vars.each { |k, v| puts "  #{k}=#{v}" }
-        puts "override:  #{override_rel.empty? ? "(none configured)" : override_rel}"
-        puts
+        lines = []
+        lines << ""
+        lines << "=== ctree summary ==="
+        lines << "worktree:  #{target_path}"
+        lines << "branch:    #{branch}#{branch_exists ? " (existing, checked out)" : " (new)"}"
+        lines << "#{env_filename}:      #{tgt_env_path}"
+        final_env_vars.each { |k, v| lines << "  #{k}=#{v}" }
+        lines << "override:  #{override_rel.empty? ? "(none configured)" : override_rel}"
+        lines << ""
 
         if volume_results.any?
-          puts "volumes:"
+          lines << "volumes:"
           copied  = volume_results.select { |_, _, st, _| st == :copied || st == :skipped || st == :failed }
           empty   = volume_results.select { |_, _, st, _| st == :empty }
           shared  = volume_results.select { |_, _, st, _| st == :shared }
@@ -659,10 +660,12 @@ module Ctree
               l = "  [#{st.to_s.ljust(7)}] #{src} -> #{tgt}"
               msg.to_s.empty? ? l : "#{l} (#{msg})"
             end
-            puts line
+            lines << line
           end
-          puts
+          lines << ""
         end
+
+        Log.section(lines.join("\n"))
       end
 
       any_failed = volume_results.any? { |_, _, st, _| st == :failed }

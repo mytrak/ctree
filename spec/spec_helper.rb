@@ -17,6 +17,10 @@ RSpec.configure do |config|
   config.disable_monkey_patching!
   config.order = :random
   Kernel.srand config.seed
+
+  config.after do
+    Ctree::LogFile.reset!
+  end
 end
 
 # Shared status double that quacks like Process::Status.
