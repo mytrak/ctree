@@ -114,6 +114,20 @@ RSpec.describe Ctree::CLI do
       )
     end
 
+    it "accepts --config=<path> and passes config_path to Create.run" do
+      Ctree::CLI.run(["create", "wt1", "branch1", "--config=/tmp/my_config.yml"])
+      expect(Ctree::Create).to have_received(:run).with(
+        name: "wt1", branch: "branch1", config_path: "/tmp/my_config.yml", force: false
+      )
+    end
+
+    it "accepts --config <path> as a relative path and passes it to Create.run" do
+      Ctree::CLI.run(["create", "wt1", "branch1", "--config", "relative_config.yml"])
+      expect(Ctree::Create).to have_received(:run).with(
+        name: "wt1", branch: "branch1", config_path: "relative_config.yml", force: false
+      )
+    end
+
     it "passes config_path: nil when --config is not given" do
       Ctree::CLI.run(["create", "wt1", "branch1"])
       expect(Ctree::Create).to have_received(:run).with(
@@ -136,6 +150,18 @@ RSpec.describe Ctree::CLI do
       Dir.mktmpdir do |dir|
         log_path = File.join(dir, "ctree.log")
         Ctree::CLI.run(["create", "wt1", "branch1", "--log-file=#{log_path}"])
+        expect(Ctree::Create).to have_received(:run).with(
+          name: "wt1", branch: "branch1", config_path: nil, force: true
+        )
+      end
+    ensure
+      Ctree::LogFile.reset!
+    end
+
+    it "strips --log-file PATH from argv and implies force: true even without --force" do
+      Dir.mktmpdir do |dir|
+        log_path = File.join(dir, "ctree.log")
+        Ctree::CLI.run(["create", "wt1", "branch1", "--log-file", log_path])
         expect(Ctree::Create).to have_received(:run).with(
           name: "wt1", branch: "branch1", config_path: nil, force: true
         )

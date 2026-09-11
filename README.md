@@ -60,10 +60,11 @@ contains the `ctree` executable.
 ## Usage
 
 Most commands run from the source repository.
-`update`, `rebase`, `free`, `env`, and `compose-config` run from inside a worktree.
+`update`, `rebase`, `free`, `env`, and `compose-config` run from inside
+a worktree.
 
 ```bash
-ctree create <worktree_name> <branch_name> [--config <path>]
+ctree create <worktree_name> <branch_name>
 ctree delete <worktree_name>
 ctree list   [all | free | used]
 ctree switch <worktree_name>
@@ -79,12 +80,12 @@ ctree help <command>
 ```
 
 Any command that normally prompt for confirmation — `create`, `delete`,
-`free`, `rebase`, `update`, `env fix`, `config add`, and `config delete` —
-accepts a global `--force` flag that skips the prompts and assumes the
-default answer shown in brackets. For prompts with no bracket default
-(i.e. ones that ask you to type the literal word "yes"), `--force` assumes
-yes. Use `ctree help <command>` for per-command specifics, including the
-cases where the assumed default means *not* proceeding (e.g. `rebase` and
+`free`, `rebase`, `update`, `env fix` and `config add/delete` — accepts
+a global `--force` flag that skips the prompts and assumes the default
+answer shown in brackets. For prompts with no bracket default (i.e. ones
+that ask you to type the literal word "yes"), `--force` assumes yes.
+Use `ctree help <command>` for per-command specifics, including the cases
+where the assumed default means *not* proceeding (e.g. `rebase` and
 `update` against a dirty or off-branch source).
 
 ### create
@@ -106,13 +107,13 @@ custom configuration that differs from the repo's shared `.ctree/config.yml`.
 The file is merged over the shipped defaults (the repo config layer is
 skipped for this worktree) and persisted into the worktree's own
 `.ctree/config.yml` so that later commands like `update`, `rebase`,
-`free`, and `env` continue to use it automatically. The path is relative
-to the current directory.
+`free`, and `env` continue to use it automatically. The path is
+relative to the current directory.
 
 ### delete
 
-Reverses `create`: lists everything that would be deleted, prompts for
-explicit `yes` confirmation, then tears it all down — the worktree
+Reverses `create`: lists everything that would be deleted, prompts
+for explicit `yes` confirmation, then tears it all down — the worktree
 directory, its `git worktree` registration, the per-project docker
 volumes, and any running compose stack.
 
@@ -125,13 +126,13 @@ case.
 
 ### switch
 
-Drops you into a new shell at the chosen worktree's directory. The name
-must match the basename of an existing worktree (as shown by
+Drops you into a new shell at the chosen worktree's directory. The
+name must match the basename of an existing worktree (as shown by
 `ctree list`). Exits with an error if no worktree matches.
 
-Because `ctree` runs as a subprocess, it cannot `cd` your current shell
-directly — `switch` spawns a child shell at the target path, and
-`exit` returns you to where you invoked it from. To make `switch`
+Because `ctree` runs as a subprocess, it cannot `cd` your current
+shell directly — `switch` spawns a child shell at the target path,
+and `exit` returns you to where you invoked it from. To make `switch`
 behave like a true `cd` in the parent shell, wrap the binary in a
 shell function as described in Install above.
 
@@ -179,11 +180,11 @@ from git's common dir, then:
    schema below).
 
 Shared volumes (`share_volumes`, e.g. gems/node_modules) are mounted
-from the source via the override file, so they are already live — update does not
-copy them.
+from the source via the override file, so they are already live — update
+does not copy them.
 
-Before doing anything, ctree warns and asks for confirmation (default **no**) if
-the source is on a non-default branch.
+Before doing anything, ctree warns and asks for confirmation (default **no**)
+if the source is on a non-default branch.
 
 ### free
 
@@ -206,8 +207,8 @@ placeholder branch so it can be reused. ctree:
 
 ### env
 
-Run **from inside a worktree**. Manages the worktree's `.env` relative to the
-source repo's `.env`.
+Run **from inside a worktree**. Manages the worktree's `.env` relative to
+the source repo's `.env`.
 
 ```bash
 ctree env list    # print current worktree .env
@@ -288,9 +289,9 @@ are two layers, with an optional third that replaces the per-repo layer for
 a single worktree:
 
 1. **Shipped defaults** in `lib/ctree/config.yml` (loaded automatically).
-2. **Per-repo override** at `<source_repo>/.ctree/config.yml` (optional). Keys
-   present here replace the shipped values; keys you omit fall through to
-   the defaults.
+2. **Per-repo override** at `<source_repo>/.ctree/config.yml` (optional).
+   Keys present here replace the shipped values; keys you omit fall through
+   to the defaults.
 3. **`ctree create --config <path>`** (optional, per-worktree). Skips the
    per-repo layer entirely for that worktree and merges the named file over
    shipped defaults instead. The custom file is persisted into the
