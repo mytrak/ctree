@@ -297,5 +297,27 @@ RSpec.describe Ctree::Config do
         end
       end
     end
+
+    it "loads a repo config file with only log_prefix set" do
+      Dir.mktmpdir do |dir|
+        write_repo_config(dir, <<~YAML)
+          log_prefix: false
+        YAML
+
+        result = described_class.load(dir)
+        expect(result[:log_level]).to eq("info")
+        expect(result[:log_prefix]).to be(false)
+      end
+    end
+
+    it "rejects invalid log_prefix values" do
+      Dir.mktmpdir do |dir|
+        write_repo_config(dir, <<~YAML)
+          log_prefix: invalid_value
+        YAML
+
+        expect { described_class.load(dir) }.to raise_error(SystemExit)
+      end
+    end
   end
 end

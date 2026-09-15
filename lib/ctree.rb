@@ -25,6 +25,7 @@ module Ctree
 
   module Log
     @debug = false
+    @log_prefix = true
 
     module_function
 
@@ -36,12 +37,24 @@ module Ctree
       @debug
     end
 
+    def log_prefix=(val)
+      @log_prefix = val
+    end
+
+    def log_prefix?
+      @log_prefix
+    end
+
+    def prefix
+      log_prefix? ? "[#{PROG}] " : ""
+    end
+
     def debug(msg)
       return unless @debug
       if LogFile.enabled?
         LogFile.write("DEBUG: #{msg}")
       else
-        puts "[#{PROG}] #{msg}"
+        puts "#{prefix}#{msg}"
       end
     end
 
@@ -49,7 +62,7 @@ module Ctree
       if LogFile.enabled?
         LogFile.write(msg)
       else
-        puts "[#{PROG}] #{msg}"
+        puts "#{prefix}#{msg}"
       end
     end
 
@@ -57,7 +70,7 @@ module Ctree
       if LogFile.enabled?
         LogFile.write("WARNING: #{msg}")
       else
-        warn "[#{PROG}] WARNING: #{msg}"
+        warn "#{prefix}WARNING: #{msg}"
       end
     end
 
@@ -65,9 +78,9 @@ module Ctree
       if LogFile.enabled?
         LogFile.write("ERROR: #{msg}")
         Scroller.stop
-        warn "[#{PROG}] ERROR: #{msg} (see #{LogFile.path} for details)"
+        warn "#{prefix}ERROR: #{msg} (see #{LogFile.path} for details)"
       else
-        warn "[#{PROG}] ERROR: #{msg}"
+        warn "#{prefix}ERROR: #{msg}"
       end
       exit code
     end
@@ -137,7 +150,7 @@ module Ctree
     module_function
 
     def start(msg)
-      @prefix = "[#{PROG}] #{msg}"
+      @prefix = "#{Ctree::Log.prefix}#{msg}"
       @start_time = Time.now
       @mutex = Mutex.new
       @paused = false
@@ -318,9 +331,8 @@ module Ctree
       # the file only ever gets each call site's past-tense completion line.
       return yield if LogFile.enabled?
 
-      prefix = "[#{PROG}] #{msg}"
       unless $stdout.tty?
-        puts prefix
+        puts "#{Ctree::Log.prefix}#{msg}"
         return yield
       end
 
@@ -334,7 +346,7 @@ module Ctree
         until state_mutex.synchronize { done }
           elapsed = (Time.now - start_time).to_i
           line = format("%s (%s) %ds",
-                        prefix,
+                        Ctree::Log.prefix,
                         SPINNER_FRAMES[spinner_idx % SPINNER_FRAMES.length],
                         elapsed)
           print "\r\e[K#{line}"
@@ -402,7 +414,7 @@ module Ctree
         LogFile.write("PROMPT: #{message}")
       end
 
-      raw = read_line("[#{PROG}] #{message} ")
+      raw = read_line("#{Ctree::Log.prefix}#{message}")
       result = if default.nil?
         raw.to_s.gsub(/[\x00-\x1f\x7f]/, "").strip == "yes"
       else
@@ -427,7 +439,7 @@ module Ctree
     # then prompts on a short second line — avoids Readline redraw artifacts
     # caused by prompts longer than the terminal width.
     def for_env_var_change(key, current_value, worktree_values: {}, force: false)
-      console_header = ["[#{PROG}] #{key}=#{current_value}"]
+      console_header = ["#{Ctree::Log.prefix}#{key}=#{current_value}"]
       if worktree_values.any?
         pad = worktree_values.keys.map(&:length).max
         worktree_values.each { |wt, val| console_header << "  #{wt.ljust(pad)}: #{val}" }
@@ -527,7 +539,7 @@ module Ctree
             elapsed = (Time.now - start_time).to_i
             pct = (tot && tot > 0) ? [(cur.to_f / tot * 100).round, 100].min : 0
             if live_progress
-              print format("\r\e[K[ctree] copying %s -> %s %d%% (%s) %ds",
+              print format("\r\e[K#{Ctree::Log.prefix}copying %s -> %s %d%% (%s) %ds",
                            src_vol, tgt_vol, pct,
                            SPINNER_FRAMES[spinner_idx % SPINNER_FRAMES.length], elapsed)
               $stdout.flush

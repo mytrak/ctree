@@ -7,6 +7,7 @@ module Ctree
     def run(subcommand)
       target_path, source_root = resolve_worktree!
       config        = Config.load(target_path)
+      Log.log_prefix = config[:log_prefix]
       override_rel  = config[:compose_override_file].to_s
       share_volumes = config[:share_volumes]
       env_filename  = config[:env_filename]

@@ -48,6 +48,7 @@ module Ctree
       # target project prefix. Those are source-shared (e.g. yarn-cache
       # mounted from the source project) and must be preserved during removal.
       config = Config.load(source_root)
+      Log.log_prefix = config[:log_prefix]
       override_rel = config[:compose_override_file].to_s
       shared_external_vols = []
       override_path = override_rel.empty? ? nil : (target_path / override_rel)

@@ -25,8 +25,9 @@ module Ctree
     OPTIONAL_ARRAY_KEYS   = %w[rebase exclude update empty_volumes post_update_hooks].freeze
     STRING_KEYS           = %w[env_filename host_name].freeze
     OPTIONAL_STRING_KEYS  = %w[host_name_suffix compose_override_file host_domain_env_key free_branch_prefix].freeze
+    BOOLEAN_KEYS          = %w[log_prefix].freeze
     VALID_LOG_LEVELS      = %w[info debug].freeze
-    SUPPORTED_KEYS        = (ARRAY_KEYS + OPTIONAL_ARRAY_KEYS + STRING_KEYS + OPTIONAL_STRING_KEYS + %w[log_level]).freeze
+    SUPPORTED_KEYS        = (ARRAY_KEYS + OPTIONAL_ARRAY_KEYS + STRING_KEYS + OPTIONAL_STRING_KEYS + BOOLEAN_KEYS + %w[log_level]).freeze
 
     def load(source_root)
       # Layered lowest → highest priority. Shipped defaults are always the
@@ -208,6 +209,13 @@ module Ctree
           Log.die "missing or invalid #{key.inspect} in ctree config (check config.yml or #{config_path})"
         end
         result[key.to_sym] = (val || "").dup
+      end
+      BOOLEAN_KEYS.each do |key|
+        val = merged[key]
+        unless val.nil? || val.is_a?(TrueClass) || val.is_a?(FalseClass)
+          Log.die "missing or invalid #{key.inspect} in ctree config (check config.yml or #{config_path})"
+        end
+        result[key.to_sym] = (val.nil? ? true : val) # default to true
       end
       log_level_val = merged["log_level"]
       if log_level_val.nil?

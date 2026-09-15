@@ -39,6 +39,7 @@ module Ctree
 
       config = Config.load(target_path)
       Log.debug_mode = config[:log_level] == "debug"
+      Log.log_prefix = config[:log_prefix]
       rebase_repo_paths = config[:rebase]
 
       Log.info "worktree:  #{target_path}  [#{current_branch}]"

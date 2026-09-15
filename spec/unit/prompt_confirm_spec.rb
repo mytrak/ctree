@@ -67,7 +67,7 @@ RSpec.describe Ctree::Prompt do
     end
 
     it "prefixes the visible non-force read-line prompt with [ctree] and a trailing space" do
-      expect(Ctree::Prompt).to receive(:read_line).with("[ctree] proceed? ")
+      expect(Ctree::Prompt).to receive(:read_line).with("[ctree] proceed?")
       allow(Ctree::Prompt).to receive(:read_line).and_return("n")
       expect(Ctree::Prompt.confirm("proceed?", default: :yes)).to eq(false)
     end

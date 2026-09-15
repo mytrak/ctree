@@ -45,7 +45,7 @@ RSpec.describe Ctree::CLI do
 
     it "shows a command's required arguments next to its name" do
       _, args, desc = Ctree::CLI::COMMANDS.find { |name, _, _| name == "create" }
-      expect(args).to eq("<worktree_name> <branch_name> [--config <path>]")
+      expect(args).to eq("<worktree_name> <branch_name>")
       expect { Ctree::CLI.run(["help"]) }.to output(a_string_including(
         "  #{"create #{args}".ljust(Ctree::CLI::COMMAND_SIGNATURE_WIDTH)}#{desc}"
       )).to_stdout

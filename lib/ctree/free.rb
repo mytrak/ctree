@@ -26,6 +26,7 @@ module Ctree
       end
 
       config = Config.load(source_root)
+      Log.log_prefix = config[:log_prefix]
       prefix = config[:free_branch_prefix]
 
       current_branch_out, _, cb_st = Sh.capture3("git", "-C", target_path.to_s, "rev-parse", "--abbrev-ref", "HEAD")

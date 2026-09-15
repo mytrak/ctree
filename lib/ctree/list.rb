@@ -14,6 +14,7 @@ module Ctree
       end
 
       cfg = Config.load(source_root)
+      Log.log_prefix = cfg[:log_prefix]
       empty_prefix = cfg[:free_branch_prefix]
 
       raw, _, st = Sh.capture3("git", "-C", source_root.to_s, "worktree", "list", "--porcelain")

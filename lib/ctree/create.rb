@@ -74,6 +74,7 @@ module Ctree
            Config.load(source_root)
          end
       Log.debug_mode = config[:log_level] == "debug"
+      Log.log_prefix = config[:log_prefix]
       share_volumes = config[:share_volumes]
       empty_volumes = config[:empty_volumes]
       exclude = config[:exclude]
@@ -183,7 +184,7 @@ module Ctree
             n = state_mutex.synchronize { done_count }
             elapsed = (Time.now - clone_start).to_i
             pct = total > 0 ? (n * 100 / total) : 0
-            print format("\r\e[K[ctree] copying source content %d%% (%s) %ds",
+            print format("\r\e[K#{Ctree::Log.prefix}copying source content %d%% (%s) %ds",
                          pct, SPINNER_FRAMES[spinner_idx % SPINNER_FRAMES.length], elapsed)
             $stdout.flush
             spinner_idx += 1
@@ -639,7 +640,7 @@ module Ctree
       if Log.debug?
         lines = []
         lines << ""
-        lines << "=== ctree summary ==="
+        lines << "=== #{Ctree::Log.prefix}summary ==="
         lines << "worktree:  #{target_path}"
         lines << "branch:    #{branch}#{branch_exists ? " (existing, checked out)" : " (new)"}"
         lines << "#{env_filename}:      #{tgt_env_path}"

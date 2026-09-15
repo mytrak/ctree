@@ -105,3 +105,7 @@ free_branch_prefix: "FREE-"
 # phase (default). 'debug' shows every per-item action — useful when
 # diagnosing volume or file issues.
 log_level: info
+
+# Whether to show the [ctree] prefix in console output. Set to false to
+# remove the prefix from all console messages.
+log_prefix: true

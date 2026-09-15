@@ -29,6 +29,7 @@ module Ctree
 
       config = Config.load(target_path)
       Log.debug_mode = config[:log_level] == "debug"
+      Log.log_prefix = config[:log_prefix]
       share_volumes = config[:share_volumes]
       update_volumes = config[:update_volumes]
       empty_volumes = config[:empty_volumes]

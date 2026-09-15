@@ -43,8 +43,8 @@ module Ctree
       Pass --force with create, delete, free, rebase, update, env fix or config
       add/delete to skip confirmation prompts and assume their default answer.
 
-      Pass --log-file=<path> or --log-file <path> with create, delete, rebase, or update
-      to write command output to <path> instead of the console. It also implies --force.
+      Pass --log-file <path> with create, delete, rebase, or update to write
+      command output to <path> instead of the console. It also implies --force.
 
       Use "ctree help <command>" for more information about a command.
     USAGE
@@ -59,16 +59,16 @@ module Ctree
         on Linux). Docker volumes are replicated under the new compose project name and
         a tailored .env is written — prompting you to accept or change each value.
 
-        --config <path> or --config=<path> replaces the repo's .ctree/config.yml
-        with a custom config file for this worktree. The custom file is merged over
-        the shipped defaults and persisted into the worktree's .ctree/config.yml so
-        that later commands (update, rebase, etc.) continue to use it.
+        --config <path> replaces the repo's .ctree/config.yml with a custom config file
+        for this worktree. The custom file is merged over the shipped defaults and
+        persisted into the worktree's .ctree/config.yml so that later commands
+        (update, rebase, etc.) continue to use it.
 
          --force skips all confirmation prompts (assuming the bracket default, or
          the shown value for per-var .env prompts) so create runs non-interactively.
 
-         --log-file=<path> or --log-file <path> writes full output to <path> instead of
-         the console. Implies --force (prompts are skipped; defaults are assumed).
+         --log-file <path> writes full output to <path> instead of the console.
+         Implies --force (prompts are skipped; defaults are assumed).
       HELP
       "delete" => <<~HELP,
         Usage:
@@ -81,8 +81,8 @@ module Ctree
 
          --force skips the confirmation prompt and proceeds with deletion.
 
-         --log-file=<path> or --log-file <path> writes full output to <path> instead
-         of the console. Implies --force (prompts are skipped; defaults are assumed).
+         --log-file <path> writes full output to <path> instead of the console.
+         Implies --force (prompts are skipped; defaults are assumed).
       HELP
       "switch" => <<~HELP,
         Usage:
@@ -114,8 +114,8 @@ module Ctree
          prompt defaults to *not* proceeding — so --force with a non-default source
          branch will abort the update rather than forcing it through.
 
-         --log-file=<path> or --log-file <path> writes full output to <path> instead
-         of the console. Implies --force (prompts are skipped; defaults are assumed).
+         --log-file <path> writes full output to <path> instead of the console.
+         Implies --force (prompts are skipped; defaults are assumed).
       HELP
       "rebase" => <<~HELP,
         Usage:
@@ -134,8 +134,8 @@ module Ctree
          which defaults to *not* proceeding — so --force will abort a rebase run
          against a dirty worktree rather than forcing it through.
 
-         --log-file=<path> or --log-file <path> writes full output to <path> instead
-         of the console. Implies --force (prompts are skipped; defaults are assumed).
+         --log-file <path> writes full output to <path> instead of the console.
+         Implies --force (prompts are skipped; defaults are assumed).
       HELP
       "free" => <<~HELP,
         Usage:
@@ -287,7 +287,7 @@ module Ctree
       verb = argv[0]
 
       if log_file
-        Log.die "--log-file requires a path, e.g. --log-file=/tmp/ctree.log" if log_file.empty?
+        Log.die "--log-file requires a path, e.g. --log-file /tmp/ctree.log" if log_file.empty?
         unless LOG_FILE_COMMANDS.include?(verb)
           Log.die "--log-file is only supported for #{LOG_FILE_COMMANDS.join(", ")}"
         end

@@ -7,6 +7,7 @@ module Ctree
     def run(subcommand, force: false)
       target_path, source_root = resolve_worktree!
       config    = Config.load(source_root)
+      Log.log_prefix = config[:log_prefix]
       skip_keys = config[:skip_env_keys]
 
       case subcommand
