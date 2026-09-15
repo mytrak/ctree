@@ -10,8 +10,14 @@ module Ctree
       RUBY_PLATFORM.include?("darwin")
     end
 
+    def apply_config_log_prefix!
+      config = Config.load(Pathname.pwd)
+      Log.log_prefix = config[:log_prefix]
+    end
+
     def add(tld:)
       Log.die "ctree domain is only supported on macOS" unless macos?
+      apply_config_log_prefix!
       container, conf_path, port = find_dnsmasq!
 
       entry = "address=/.#{tld}/127.0.0.1"
@@ -29,6 +35,7 @@ module Ctree
 
     def remove(tld:)
       Log.die "ctree domain is only supported on macOS" unless macos?
+      apply_config_log_prefix!
       container, conf_path, _ = find_dnsmasq!
 
       entry = "address=/.#{tld}/127.0.0.1"
@@ -47,6 +54,7 @@ module Ctree
 
     def list
       Log.die "ctree domain is only supported on macOS" unless macos?
+      apply_config_log_prefix!
       _, conf_path, _ = find_dnsmasq!
       lines = read_conf(conf_path)
       tlds = lines.filter_map do |line|
@@ -145,6 +153,6 @@ module Ctree
     end
 
     private_class_method :find_dnsmasq!, :read_conf, :restart_container,
-                         :write_resolver, :remove_resolver
+                         :write_resolver, :remove_resolver, :apply_config_log_prefix!
   end
 end
