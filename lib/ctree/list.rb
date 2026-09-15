@@ -4,7 +4,7 @@ module Ctree
   module List
     module_function
 
-    def run(filter: nil)
+    def run(filter: nil, show_current: true)
       source_root = Pathname.pwd
       toplevel_out, _, status = Sh.capture3("git", "-C", source_root.to_s, "rev-parse", "--show-toplevel")
       Log.die "not inside a git repository" unless status.success?
@@ -66,7 +66,7 @@ module Ctree
         branch_label = (entry[:free] ? "#{branch} (free)" : branch)
         tags = []
         tags << "source" if entry[:source]
-        tags << "current" if entry[:current]
+        tags << "current" if entry[:current] && show_current
         marker = tags.empty? ? "" : " ← #{tags.join(", ")}"
         puts "  #{name}  #{entry[:path]}  [#{branch_label}]#{marker}"
       end

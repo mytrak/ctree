@@ -169,6 +169,45 @@ RSpec.describe Ctree::List do
     end
   end
 
+  describe "Ctree::CLI list with --no-current flag" do
+    before { stub_git_and_config(prefix: "CTR-") }
+
+    it "shows current tag by default" do
+      # We need to make sure the test directory is the same as example-source
+      # to ensure it gets marked as current
+      allow(Ctree::Sh).to receive(:capture3) do |*cmd|
+        case [cmd[0], cmd[3], cmd[4]]
+        when ["git", "rev-parse", "--show-toplevel"]
+          [@root.to_s, "", fake_status(true)]
+        when ["git", "worktree", "list"]
+          [PORCELAIN_TWO_WORKTREES.sub("/src/example-source", @root.to_s), "", fake_status(true)]
+        else
+          raise "unexpected Sh.capture3: #{cmd.inspect}"
+        end
+      end
+      output = capture_stdout { Ctree::CLI.run(["list"]) }
+      expect(output).to include(" ← source, current")
+    end
+
+    it "suppresses current tag when --no-current is passed" do
+      # We need to make sure the test directory is the same as example-source
+      # to ensure it gets marked as current
+      allow(Ctree::Sh).to receive(:capture3) do |*cmd|
+        case [cmd[0], cmd[3], cmd[4]]
+        when ["git", "rev-parse", "--show-toplevel"]
+          [@root.to_s, "", fake_status(true)]
+        when ["git", "worktree", "list"]
+          [PORCELAIN_TWO_WORKTREES.sub("/src/example-source", @root.to_s), "", fake_status(true)]
+        else
+          raise "unexpected Sh.capture3: #{cmd.inspect}"
+        end
+      end
+      output = capture_stdout { Ctree::CLI.run(["list", "--no-current"]) }
+      expect(output).not_to include(" ← source, current")
+      expect(output).to include(" ← source")
+    end
+  end
+
   describe ".parse_worktree_porcelain" do
     it "parses path, branch, and marks first entry as source" do
       entries = described_class.parse_worktree_porcelain(PORCELAIN_TWO_WORKTREES)

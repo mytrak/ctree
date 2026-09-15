@@ -101,6 +101,8 @@ module Ctree
         on a placeholder branch (prefix configured via free_branch_prefix in
         .ctree/config.yml, default "FREE-"); "used" shows only worktrees on a
         non-free branch. Omitting the filter (or passing "all") lists everything.
+
+         --no-current   suppresses the 'current' tag in the list output
       HELP
       "update" => <<~HELP,
         Usage:
@@ -385,13 +387,15 @@ module Ctree
         usage_and_exit unless argv.length == 1
         ShellInit.run
       when "list"
+        show_current = !argv.include?("--no-current")
+        argv.delete("--no-current") # Remove flag from argv to clean up parsing
         case argv[1..]
         when [], ["all"]
-          List.run
+          List.run(show_current: show_current)
         when ["free"]
-          List.run(filter: :free)
+          List.run(filter: :free, show_current: show_current)
         when ["used"]
-          List.run(filter: :used)
+          List.run(filter: :used, show_current: show_current)
         else
           usage_and_exit
         end
