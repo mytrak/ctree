@@ -217,6 +217,17 @@ module Ctree
         end
         result[key.to_sym] = (val.nil? ? true : val) # default to true
       end
+
+      # NEW: Apply environment variable override for log_prefix
+      if ENV['CTREE_LOG_PREFIX']
+        env_val = ENV['CTREE_LOG_PREFIX'].downcase
+        if %w[true false].include?(env_val)
+          result[:log_prefix] = (env_val == 'true')
+        else
+          Log.warn_ "invalid value for CTREE_LOG_PREFIX: #{ENV['CTREE_LOG_PREFIX']}. Expected 'true' or 'false'. Ignoring."
+        end
+      end
+
       log_level_val = merged["log_level"]
       if log_level_val.nil?
         result[:log_level] = "info"

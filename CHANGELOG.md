@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Added CTREE_LOG_PREFIX env var
 - Added log prefix config option
 
 ## [0.3.0] - 2026-09-10

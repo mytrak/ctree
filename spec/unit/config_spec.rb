@@ -319,5 +319,48 @@ RSpec.describe Ctree::Config do
         expect { described_class.load(dir) }.to raise_error(SystemExit)
       end
     end
+
+    describe "environment variable overrides" do
+      it "overrides log_prefix with CTREE_LOG_PREFIX=false even if config is true" do
+        Dir.mktmpdir do |dir|
+          write_repo_config(dir, "log_prefix: true\n")
+          ENV['CTREE_LOG_PREFIX'] = 'false'
+          begin
+            result = described_class.load(dir)
+            expect(result[:log_prefix]).to be(false)
+          ensure
+            ENV.delete('CTREE_LOG_PREFIX')
+          end
+        end
+      end
+
+      it "overrides log_prefix with CTREE_LOG_PREFIX=true even if config is false" do
+        Dir.mktmpdir do |dir|
+          write_repo_config(dir, "log_prefix: false\n")
+          ENV['CTREE_LOG_PREFIX'] = 'true'
+          begin
+            result = described_class.load(dir)
+            expect(result[:log_prefix]).to be(true)
+          ensure
+            ENV.delete('CTREE_LOG_PREFIX')
+          end
+        end
+      end
+
+      it "falls back to config and warns when CTREE_LOG_PREFIX is invalid" do
+        Dir.mktmpdir do |dir|
+          write_repo_config(dir, "log_prefix: true\n")
+          ENV['CTREE_LOG_PREFIX'] = 'maybe'
+          begin
+            expect {
+              result = described_class.load(dir)
+              expect(result[:log_prefix]).to be(true)
+            }.to output(/invalid value for CTREE_LOG_PREFIX: maybe/).to_stderr
+          ensure
+            ENV.delete('CTREE_LOG_PREFIX')
+          end
+        end
+      end
+    end
   end
 end
