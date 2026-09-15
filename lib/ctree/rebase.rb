@@ -123,7 +123,18 @@ module Ctree
         Log.section(lines.join("\n"))
       end
 
+      # === post-rebase hooks ===
       failed = results.any? { |st, _, _| st == :failed }
+      if !failed && config[:post_rebase_hooks].any?
+        post_rebase_hooks = config[:post_rebase_hooks]
+        Spinner.with_spinner("running post-rebase hooks") do
+          post_rebase_hooks.each do |cmd|
+            system(cmd)
+            Log.die "post-rebase hook failed: #{cmd}" unless $?.success?
+          end
+        end
+      end
+
       exit(failed ? 2 : 0)
     end
 

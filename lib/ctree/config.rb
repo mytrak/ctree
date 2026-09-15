@@ -22,7 +22,7 @@ module Ctree
     SHIPPED_CONFIG_PATH   = File.expand_path("config.yml", __dir__)
     REPO_CONFIG_REL       = File.join(".ctree", "config.yml")
     ARRAY_KEYS            = %w[update_volumes share_volumes skip_env_keys].freeze
-    OPTIONAL_ARRAY_KEYS   = %w[rebase exclude update empty_volumes post_update_hooks].freeze
+    OPTIONAL_ARRAY_KEYS   = %w[rebase exclude update empty_volumes post_update_hooks post_rebase_hooks].freeze
     STRING_KEYS           = %w[env_filename host_name].freeze
     OPTIONAL_STRING_KEYS  = %w[host_name_suffix compose_override_file host_domain_env_key free_branch_prefix].freeze
     BOOLEAN_KEYS          = %w[log_prefix].freeze

@@ -17,6 +17,7 @@ module Ctree
       ["domain", "[list | [add | delete] <tld>]", "configure local DNS resolution for a TLD (macOS only)"],
       ["config", "[list | add | delete]", "manage the per-repo .ctree/config.yml"],
       ["compose-config", "[list | check | fix]", "manage shared-volume references in the compose override"],
+      ["sync", "", "sync the worktree by rebasing and updating"],
       ["help", "[command]", "show detailed help for a command"]
     ].freeze
 
@@ -219,6 +220,26 @@ module Ctree
 
         Prints the installed ctree version.
       HELP
+      "sync" => <<~HELP,
+        Usage:
+          ctree sync
+
+        Run from inside a worktree. Does two things in order:
+        1. Rebases the worktree's current branch onto the source repo's master.
+           Skips if master is already an ancestor. Aborts if there are conflicts.
+        2. Rebases each embedded git repo (directories listed under `rebase` in
+           .ctree/config.yml, e.g. gems/plugins) from its source counterpart.
+
+        All operations are local — no network calls. Update the source repo first,
+        then run `ctree sync` from the worktree to catch it up.
+
+         --force assumes the shown default for the uncommitted-changes prompt,
+         which defaults to *not* proceeding — so --force will abort a rebase run
+         against a dirty worktree rather than forcing it through.
+
+         --log-file <path> writes full output to <path> instead of the console.
+         Implies --force (prompts are skipped; defaults are assumed).
+      HELP
     }.freeze
 
     def usage_and_exit
@@ -238,7 +259,7 @@ module Ctree
       "#{base} — try '#{suggestion}'"
     end
 
-    LOG_FILE_COMMANDS = %w[create delete rebase update].freeze
+    LOG_FILE_COMMANDS = %w[create delete rebase update sync].freeze
 
     # Wraps a create/delete/rebase/update invocation when --log-file was
     # given: redirects Log/Prompt/Spinner output to the file and shows a
@@ -354,6 +375,11 @@ module Ctree
         usage_and_exit unless argv.length == 1
         with_logging(log_file, "rebasing worktree", "rebased worktree") do
           Rebase.run(force: force)
+        end
+      when "sync"
+        usage_and_exit unless argv.length == 1
+        with_logging(log_file, "syncing worktree", "synced worktree") do
+          Sync.run(force: force)
         end
       when "shell-init"
         usage_and_exit unless argv.length == 1
