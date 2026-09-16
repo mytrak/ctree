@@ -80,7 +80,7 @@ ctree help <command>
 ```
 
 Any command that normally prompt for confirmation — `create`, `delete`,
-`free`, `rebase`, `update`, `env fix` and `config add/delete` — accepts
+`rebase`, `update`, `env fix` and `config add/delete` — accepts
 a global `--force` flag that skips the prompts and assumes the default
 answer shown in brackets. For prompts with no bracket default (i.e. ones
 that ask you to type the literal word "yes"), `--force` assumes yes.
@@ -191,19 +191,18 @@ if the source is on a non-default branch.
 Run **from inside a worktree** (no arguments). Resets the worktree to a free
 placeholder branch so it can be reused. ctree:
 
-1. Prompts for confirmation (default **yes**).
-2. Lists all local branches whose names start with the configured
-   `free_branch_prefix` (default `FREE-`).
-3. Checks out the first available branch — one not currently checked out in
-   any worktree — sorted alphabetically.
-4. If all free branches are occupied, creates the next sequential one,
-   filling gaps in the numeric sequence. For example, if `FREE-001` and
-   `FREE-003` both exist and are checked out, it creates and checks out
-   `FREE-002`. If no free branches exist at all, it creates `FREE-001`.
-   Numbers are zero-padded to at least 3 digits (`FREE-001`, `FREE-002`, …).
-5. Rebases the checked-out branch onto the source repo's `master` (skipped
-   automatically if already up to date). Aborts and reports on conflict —
-   resolve manually and re-run `ctree rebase` from the worktree.
+1. Lists all local branches whose names start with the configured
+    `free_branch_prefix` (default `FREE-`).
+2. Checks out the first available branch — one not currently checked out in
+    any worktree — sorted alphabetically.
+3. If all free branches are occupied, creates the next sequential one,
+    filling gaps in the numeric sequence. For example, if `FREE-001` and
+    `FREE-003` both exist and are checked out, it creates and checks out
+    `FREE-002`. If no free branches exist at all, it creates `FREE-001`.
+    Numbers are zero-padded to at least 3 digits (`FREE-001`, `FREE-002`, …).
+4. Rebases the checked-out branch onto the source repo's `master` (skipped
+    automatically if already up to date). Aborts and reports on conflict —
+    resolve manually and re-run `ctree rebase` from the worktree.
 
 ### env
 

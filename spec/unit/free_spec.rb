@@ -65,10 +65,9 @@ RSpec.describe Ctree::Free do
       end
     end
 
-    # Stubs all git calls and the prompt. checkout calls fall through to the
-    # else clause (returning success) so have_received can assert them after.
-    def stub_run(prompt_answer: "", branches_output: "", porcelain: "")
-      allow(Ctree::Prompt).to receive(:read_line).and_return(prompt_answer)
+    # Stubs all git calls. checkout calls fall through to the else clause
+    # (returning success) so have_received can assert them after.
+    def stub_run(branches_output: "", porcelain: "")
       allow(Ctree::Config).to receive(:load).and_return(
         Ctree::Config.defaults.merge(free_branch_prefix: "FREE-")
       )
@@ -88,20 +87,7 @@ RSpec.describe Ctree::Free do
       end
     end
 
-    it "exits cleanly when user answers n" do
-      stub_run(prompt_answer: "n")
-      expect { described_class.run }.to raise_error(SystemExit) { |e| expect(e.status).to eq(0) }
-    end
-
-    it "frees the worktree without prompting when force is true" do
-      stub_run(branches_output: "", porcelain: "")
-      expect(Ctree::Prompt).not_to receive(:read_line)
-      described_class.run(force: true)
-      expect(Ctree::Sh).to have_received(:capture3)
-        .with("git", "-C", @target.to_s, "checkout", "-b", "FREE-001")
-    end
-
-    it "exits early without prompting when already on a free branch" do
+    it "exits early when already on a free branch" do
       stub_run
       allow(Ctree::Sh).to receive(:capture3)
         .with("git", "-C", @target.to_s, "rev-parse", "--abbrev-ref", "HEAD")
@@ -109,7 +95,6 @@ RSpec.describe Ctree::Free do
       expect { described_class.run }
         .to raise_error(SystemExit) { |e| expect(e.status).to eq(0) }
         .and output(/already on a free branch \(FREE-005\)/).to_stdout
-      expect(Ctree::Prompt).not_to have_received(:read_line)
       expect(Ctree::Sh).not_to have_received(:capture3)
         .with("git", "-C", @target.to_s, "checkout", anything)
     end

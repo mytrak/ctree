@@ -133,7 +133,7 @@ module Ctree
          --log-file <path> writes full output to <path> instead of the console.
          Implies --force (prompts are skipped; defaults are assumed).
       HELP
-      "free" => <<~HELP,
+       "free" => <<~HELP,
         Usage:
           ctree free
 
@@ -144,7 +144,6 @@ module Ctree
         (FREE-001 + FREE-003 occupied → creates FREE-002). The prefix is configurable
         via free_branch_prefix in .ctree/config.yml.
 
-        --force skips the confirmation prompt and frees the worktree.
       HELP
       "env" => <<~HELP,
         Usage:
@@ -342,7 +341,7 @@ module Ctree
         end
       when "free"
         usage_and_exit unless argv.length == 1
-        Free.run(force: force)
+        Free.run
       when "env"
         subcommand = argv[1]
         usage_and_exit unless %w[list check fix].include?(subcommand)

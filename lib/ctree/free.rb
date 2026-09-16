@@ -6,7 +6,7 @@ module Ctree
   module Free
     module_function
 
-    def run(force: false)
+    def run
       target_path = Pathname.pwd
       toplevel_out, _, status = Sh.capture3("git", "-C", target_path.to_s, "rev-parse", "--show-toplevel")
       Log.die "not inside a git repository" unless status.success?
@@ -34,11 +34,6 @@ module Ctree
       current_branch = current_branch_out.strip
       if !prefix.empty? && current_branch.start_with?(prefix)
         Log.info "already on a free branch (#{current_branch}); nothing to do"
-        exit 0
-      end
-
-      unless Prompt.confirm("Free this worktree? [Y/n]:", default: :yes, force: force)
-        Log.info "aborted"
         exit 0
       end
 
