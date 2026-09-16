@@ -305,7 +305,7 @@ module Ctree
       if Log.debug?
         lines = []
         lines << ""
-        lines << "=== ctree update summary ==="
+        lines << "=== update summary ==="
         lines << "worktree:  #{target_path}"
 
         if sync_results.any?

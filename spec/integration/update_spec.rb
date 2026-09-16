@@ -267,6 +267,41 @@ RSpec.describe "Ctree::CLI update" do
     end
   end
 
+  it "prints the debug summary header as '=== update summary ==='" do
+    FileUtils.mkdir_p((@work / ".ctree").to_s)
+    File.write((@work / ".ctree" / "config.yml").to_s, "log_level: debug\n")
+    system("git", "-C", @work.to_s, "add", ".ctree",
+           out: File::NULL, err: File::NULL)
+    system("git", "-C", @work.to_s, "commit", "-q", "--amend", "--no-edit",
+           out: File::NULL, err: File::NULL)
+
+    wt = @parent / "wt1"
+    system("git", "-C", @work.to_s, "worktree", "add", "-q", "-b", "wt1", wt.to_s,
+           out: File::NULL, err: File::NULL)
+    File.write((wt / ".env").to_s, "COMPOSE_PROJECT_NAME=wt1\n")
+
+    stub_sh(
+      docker_system: [true],
+      docker_capture3: [
+        ["", "", true],  # docker ps source
+        ["", "", true],  # docker ps target
+        ["", "", true],  # Images.tag_to_target
+        ["", "", true],  # docker volume ls
+      ]
+    )
+
+    Dir.chdir(wt.to_s) do
+      expect { Ctree::CLI.run(["update"]) }
+        .to raise_error(SystemExit) { |e| expect(e.status).to eq(0) }
+        .and output(/=== update summary ===/).to_stdout
+    end
+  ensure
+    if defined?(wt) && wt
+      system("git", "-C", @work.to_s, "worktree", "remove", "--force", wt.to_s,
+             out: File::NULL, err: File::NULL)
+    end
+  end
+
   it "skips a volume in empty_volumes during update" do
     FileUtils.mkdir_p((@work / ".ctree").to_s)
     File.write((@work / ".ctree" / "config.yml").to_s,

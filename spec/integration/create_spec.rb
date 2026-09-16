@@ -31,6 +31,17 @@ RSpec.describe "Ctree::CLI create" do
     end
   end
 
+  it "prints the debug summary header as '=== create summary ===' regardless of log_prefix" do
+    # ... reuse this file's existing successful `ctree create` setup/stubs ...
+    FileUtils.mkdir_p((@work / ".ctree").to_s)
+    File.write((@work / ".ctree" / "config.yml").to_s, "log_level: debug\nlog_prefix: false\n")
+    stub_clonefile
+    stub_sh(docker_capture3: docker_stubs)
+
+    expect { Ctree::CLI.run(["create", "wt1"]) }
+      .to output(/=== create summary ===/).to_stdout
+  end
+
   it "rejects an invalid worktree name" do
     expect {
       Ctree::CLI.run(["create", "Bad Name", "wt1"])
