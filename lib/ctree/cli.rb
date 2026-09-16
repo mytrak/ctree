@@ -38,16 +38,9 @@ module Ctree
       Available Commands:
       #{COMMANDS_TABLE}
 
-      Most commands run from the top of the source repository.
-      `update`, `rebase`, `free`, `env`, and `compose-config` run from inside a worktree.
-
-      Pass --force with create, delete, free, rebase, update, env fix or config
-      add/delete to skip confirmation prompts and assume their default answer.
-
-      Pass --log-file <path> with create, delete, rebase, or update to write
-      command output to <path> instead of the console. It also implies --force.
-
-      Use "ctree help <command>" for more information about a command.
+      Most commands run from the source repository. `update`, `rebase`, `free`,
+      `env`, and `compose-config` run from inside a worktree. Use "ctree help
+      <command>" for more information about a command and its options.
     USAGE
 
     HELP = {
@@ -226,18 +219,11 @@ module Ctree
         Usage:
           ctree sync
 
-        Run from inside a worktree. Does two things in order:
-        1. Rebases the worktree's current branch onto the source repo's master.
-           Skips if master is already an ancestor. Aborts if there are conflicts.
-        2. Rebases each embedded git repo (directories listed under `rebase` in
-           .ctree/config.yml, e.g. gems/plugins) from its source counterpart.
+        Run from inside a worktree. Equivalent to running rebase and update
+        commands. All operations are local — no network calls. Update the source
+        repo first, then run `ctree sync` from the worktree to catch it up.
 
-        All operations are local — no network calls. Update the source repo first,
-        then run `ctree sync` from the worktree to catch it up.
-
-         --force assumes the shown default for the uncommitted-changes prompt,
-         which defaults to *not* proceeding — so --force will abort a rebase run
-         against a dirty worktree rather than forcing it through.
+         --force skips confirmations and assumes the default values.
 
          --log-file <path> writes full output to <path> instead of the console.
          Implies --force (prompts are skipped; defaults are assumed).
@@ -250,9 +236,8 @@ module Ctree
     end
 
     # Worktree names double as Docker Compose project names, which Docker
-    # requires to be lowercase letters/digits/'-'/'_' and to start with a
-    # letter or digit. If the user passed something close (e.g. an
-    # uppercase or dotted variant), suggest the sanitized form.
+    # requires to be lowercase letters/digits/'-'/'_'. If the user passed
+    # something close, suggest the sanitized form.
     def invalid_name_message(name)
       base = "invalid name '#{name}'; must be lowercase letters, digits, '-', or '_', " \
              "starting with a letter or digit (Docker Compose project name constraint)"
@@ -263,14 +248,9 @@ module Ctree
 
     LOG_FILE_COMMANDS = %w[create delete rebase update sync].freeze
 
-    # Wraps a create/delete/rebase/update invocation when --log-file was
-    # given: redirects Log/Prompt/Spinner output to the file and shows a
-    # single status line + spinner on the console, replaced on success by
-    # `done_message` + elapsed time — same present/past-tense swap pattern
-    # `Spinner.with_spinner` uses for individual steps. On failure, stays
-    # silent (matches the no-log-file behavior, where these paths signal
-    # failure only via already-streamed Log.warn_/Log.die lines and the
-    # exit code). A no-op passthrough when log_file is nil.
+    # Wraps create/delete/rebase/update invocation when --log-file is given:
+    # redirects output to the file and shows status on the console. On failure,
+    # stays silent (matches no-log-file behavior). A no-op if log_file is nil.
     def with_logging(log_file, progress_message, done_message)
       return yield unless log_file
 
