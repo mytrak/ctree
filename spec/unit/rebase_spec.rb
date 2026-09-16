@@ -1,5 +1,36 @@
 # frozen_string_literal: true
 
+RSpec.describe "Ctree::Rebase debug summary" do
+  around do |ex|
+    Dir.mktmpdir do |tmp|
+      @source = Pathname.new(tmp).realpath
+      Dir.mkdir((@source / "worktree").to_s)
+      @target = (@source / "worktree").realpath
+      Dir.chdir(@target.to_s) { ex.run }
+    end
+  end
+
+  it "prints '=== rebase summary ===' when log_level is debug" do
+    allow(Ctree::Sh).to receive(:capture3) do |*cmd|
+      case [cmd[0], cmd[3], cmd[4]]
+      when ["git", "rev-parse", "--show-toplevel"]  then [@target.to_s, "", fake_status(true)]
+      when ["git", "rev-parse", "--git-common-dir"] then ["../.git", "", fake_status(true)]
+      when ["git", "rev-parse", "--abbrev-ref"]     then ["CTR-001", "", fake_status(true)]
+      when ["git", "merge-base", "--is-ancestor"]   then ["", "", fake_status(true)]
+      when ["git", "status", "--porcelain"]         then ["", "", fake_status(true)]
+      else raise "unexpected: #{cmd.inspect}"
+      end
+    end
+    allow(Ctree::Config).to receive(:load)
+      .and_return(Ctree::Config.defaults.merge(log_level: "debug"))
+    allow(Ctree::Rebase).to receive(:embedded_repos).and_return([])
+    allow(Ctree::Rebase).to receive(:exit)
+
+    expect { Ctree::Rebase.run }
+      .to output(/=== rebase summary ===/).to_stdout
+  end
+end
+
 RSpec.describe "Ctree::Rebase main branch skip logic" do
   def stub_run_up_to(target, source, branch:, ancestor:)
     allow(Ctree::Sh).to receive(:capture3) do |*cmd|

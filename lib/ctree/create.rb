@@ -640,7 +640,7 @@ module Ctree
       if Log.debug?
         lines = []
         lines << ""
-        lines << "=== #{Ctree::Log.prefix}summary ==="
+        lines << "=== create summary ==="
         lines << "worktree:  #{target_path}"
         lines << "branch:    #{branch}#{branch_exists ? " (existing, checked out)" : " (new)"}"
         lines << "#{env_filename}:      #{tgt_env_path}"
