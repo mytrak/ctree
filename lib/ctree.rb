@@ -345,8 +345,9 @@ module Ctree
         spinner_idx = 0
         until state_mutex.synchronize { done }
           elapsed = (Time.now - start_time).to_i
-          line = format("%s (%s) %ds",
+          line = format("%s%s (%s) %ds",
                         Ctree::Log.prefix,
+                        msg,
                         SPINNER_FRAMES[spinner_idx % SPINNER_FRAMES.length],
                         elapsed)
           print "\r\e[K#{line}"

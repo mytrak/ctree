@@ -40,6 +40,21 @@ RSpec.describe Ctree::Spinner do
         expect { Ctree::Spinner.with_spinner("doing thing") { :ok } }
           .to output("[ctree] doing thing\n").to_stdout
       end
+
+      it "includes the progress label in the animated spinner line on a tty" do
+        allow($stdout).to receive(:tty?).and_return(true)
+        # Capture stdout during the spinner execution using a StringIO buffer
+        output = StringIO.new
+        original_stdout = $stdout
+        $stdout = output
+        begin
+          Ctree::Spinner.with_spinner("rebasing free003 onto master") { sleep 0.15 }
+        ensure
+          $stdout = original_stdout
+        end
+        result = output.string
+        expect(result).to include("rebasing free003 onto master")
+      end
     end
   end
 end
