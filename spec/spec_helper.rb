@@ -20,6 +20,7 @@ RSpec.configure do |config|
 
   config.after do
     Ctree::LogFile.reset!
+    Ctree::Log.reset!
   end
 end
 

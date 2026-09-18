@@ -2,6 +2,7 @@
 
 require "spec_helper"
 require "fileutils"
+require "stringio"
 
 RSpec.describe "Ctree::CLI sync" do
   around do |ex|
@@ -28,7 +29,7 @@ RSpec.describe "Ctree::CLI sync" do
     allow(Ctree::Update).to receive(:run).and_return(0)
 
     Dir.chdir(@work.to_s) do
-      expect { Ctree::CLI.run(["sync"]) }.to raise_error(SystemExit)
+      Ctree::CLI.run(["sync"])
     end
     expect(Ctree::Rebase).to have_received(:run)
     expect(Ctree::Update).to have_received(:run)
@@ -45,38 +46,51 @@ RSpec.describe "Ctree::CLI sync" do
   end
 
   it "executes post_rebase_hooks if they exist" do
-    # Setup config with hooks
-    FileUtils.mkdir_p((@work / ".ctree").to_s)
-    File.write((@work / ".ctree" / "config.yml").to_s, "post_rebase_hooks:\n  - touch hook_ran\n")
+    # Ctree::Rebase.run rebases onto the source's local "master" branch by
+    # name, so the source needs one in addition to its default "main".
+    system("git", "branch", "master")
 
-    # Create a commit in the worktree to make it have something to rebase onto
-    (Pathname.pwd / "test2.txt").write("content2")
-    Sh.system("git", "-C", Pathname.pwd.to_s, "add", "test2.txt")
-    Sh.system("git", "-C", Pathname.pwd.to_s, "commit", "-m", "Add test file 2")
+    wt = @parent / "wt1"
+    system("git", "worktree", "add", "-q", "-b", "feature-x", wt.to_s, out: File::NULL, err: File::NULL)
 
-    Dir.chdir(@work.to_s) do
-      allow(Ctree::Rebase).to receive(:run).and_return(0)
-      allow(Ctree::Update).to receive(:run).and_return(0)
+    FileUtils.mkdir_p((wt / ".ctree").to_s)
+    File.write((wt / ".ctree" / "config.yml").to_s, "post_rebase_hooks:\n  - touch hook_ran\n")
+    system("git", "-C", wt.to_s, "add", ".ctree/config.yml", out: File::NULL, err: File::NULL)
+    system("git", "-C", wt.to_s, "commit", "-q", "-m", "add config", out: File::NULL, err: File::NULL)
+
+    # Let the real Rebase.run execute (it's what runs the hooks); only
+    # swallow its mandatory exit and stub away Update, which needs docker.
+    allow(Ctree::Rebase).to receive(:exit)
+    allow(Ctree::Update).to receive(:run).and_return(0)
+
+    Dir.chdir(wt.to_s) do
       Ctree::CLI.run(["sync"])
     end
 
-    expect((@work / "hook_ran").exist?).to be true
+    expect((wt / "hook_ran").exist?).to be true
   end
 
   it "redirects output to --log-file" do
     Dir.mktmpdir do |log_dir|
       log_path = File.join(log_dir, "sync.log")
 
-      # Setup worktree with some basic commits
-      (Pathname.pwd / "test2.txt").write("content2")
-      Sh.system("git", "-C", Pathname.pwd.to_s, "add", "test2.txt")
-      Sh.system("git", "-C", Pathname.pwd.to_s, "commit", "-m", "Add test file 2")
+      allow(Ctree::Rebase).to receive(:run).and_return(0)
+      allow(Ctree::Update).to receive(:run).and_return(0)
 
-      Dir.chdir(@work.to_s) do
-        Ctree::CLI.run(["sync", "--log-file=#{log_path}"])
+      out = StringIO.new
+      original_stdout = $stdout
+      $stdout = out
+      begin
+        Dir.chdir(@work.to_s) do
+          Ctree::CLI.run(["sync", "--log-file=#{log_path}"])
+        end
+      ensure
+        $stdout = original_stdout
       end
 
-      expect(File.read(log_path)).to include("syncing worktree")
+      console_output = out.string
+      expect(console_output).to include("syncing worktree")
+      expect(console_output).to match(/synced worktree \(\d+s\)/)
     end
   end
 end

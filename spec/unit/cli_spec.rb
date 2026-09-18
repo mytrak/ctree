@@ -39,7 +39,7 @@ RSpec.describe Ctree::CLI do
         *Ctree::CLI::COMMAND_SIGNATURES.zip(Ctree::CLI::COMMANDS).map { |sig, (_, _, desc)|
           "  #{sig.ljust(Ctree::CLI::COMMAND_SIGNATURE_WIDTH)}#{desc}"
         },
-        'Use "ctree help <command>" for more information about a command.'
+        "Use \"ctree help\n<command>\" for more information about a command and its options."
       )).to_stdout
     end
 
@@ -93,8 +93,8 @@ RSpec.describe Ctree::CLI do
         $stdout = original_stdout
       end
       text = captured.string
-      footnote_index = text.index("Most commands run from the top of the source repository.")
-      footer_index = text.index('Use "ctree help <command>" for more information about a command.')
+      footnote_index = text.index("Most commands run from the source repository.")
+      footer_index = text.index("Use \"ctree help\n<command>\" for more information about a command and its options.")
       expect(footnote_index).not_to be_nil
       expect(footer_index).not_to be_nil
       expect(footnote_index).to be < footer_index
