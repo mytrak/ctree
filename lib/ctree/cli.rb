@@ -305,7 +305,7 @@ module Ctree
       when "create"
         if argv.length == 3
           config_path = nil
-        elsif (idx = argv.index("--config="))
+        elsif (idx = argv.index { |a| a.start_with?("--config=") })
           config_path = argv[idx].sub("--config=", "")
           argv.delete_at(idx) # Clean up argv
         elsif argv.length == 5 && argv[3] == "--config"

@@ -41,6 +41,13 @@ module Ctree
       @log_prefix = val
     end
 
+    # Test-only: specs run in one process, so state must be reset between
+    # examples.
+    def reset!
+      @debug = false
+      @log_prefix = true
+    end
+
     def log_prefix?
       @log_prefix
     end
