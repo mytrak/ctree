@@ -7,28 +7,24 @@ each other's state.
 
 ## Install
 
-Clone this repository, then add a single line to your shell rc so the
-`ctree` function is available in every terminal:
+Clone this repository, then add its `bin` directory to your `PATH` so
+the `ctree` binary is available in every terminal:
 
 ```bash
 cd your_repositories_directory
 git clone https://github.com/mytrak/ctree.git
 ```
 
-`ctree shell-init` prints a shell function; you `eval` its output so the
-function is defined in your current shell. Execute commands below to add
-an entry for ctree to your **`~/.zshrc`** (zsh, the macOS default) or
-**`~/.bashrc`** (bash). Don't add an entry to `~/.bash_profile` or
-`~/.zprofile` as those run only for login shells, but the function needs
-to be defined for every interactive shell.
+Execute the command below to add an entry for ctree to your
+**`~/.zshrc`** (zsh, the macOS default) or **`~/.bashrc`** (bash).
+Don't add an entry to `~/.bash_profile` or `~/.zprofile` as those run
+only for login shells, but `ctree` needs to be on `PATH` for every
+interactive shell.
 
 ```bash
 cd ctree
-echo "eval \"\$($(pwd)/bin/ctree shell-init)\"" >> ~/.zshrc
+echo "export PATH=\"$(pwd)/bin:\$PATH\"" >> ~/.zshrc
 ```
-
-The function is regenerated on every shell startup, so it always matches
-the installed binary — there is nothing to re-paste when ctree is upgraded.
 
 Then reload the file (or just open a new terminal tab):
 
@@ -39,23 +35,17 @@ source ~/.zshrc
 Verify:
 
 ```bash
-type ctree            # should print: ctree is a shell function
+type ctree            # should print: ctree is /path/to/ctree/bin/ctree
 ctree list            # sanity-check that the binary runs
 ```
-
-With the shell function installed, `ctree switch <name>` changes the
-directory of your current shell directly — no subshell involved. Every
-other subcommand (`create`, `delete`, `list`, `update`, `config`, etc.)
-falls through to the real binary unchanged. Without the shell function,
-`ctree switch <name>` spawns a child shell at the target path instead —
-`exit` returns you to where you invoked it from.
 
 #### Troubleshooting
 
 **`command not found: ctree` in a fresh terminal** — `.zshrc` either
-isn't being read or it bailed early. Check `echo $0` (should be
-`-zsh`), then confirm the `eval` line points at a path that actually
-contains the `ctree` executable.
+isn't being read or it bailed early, or the exported `PATH` entry
+doesn't point at the directory containing the `ctree` executable.
+Check `echo $0` (should be `-zsh`), then confirm the `export PATH`
+line is correct.
 
 ## Usage
 
@@ -67,7 +57,6 @@ a worktree.
 ctree create <worktree_name> <branch_name>
 ctree delete <worktree_name>
 ctree list   [all | free | used]
-ctree switch <worktree_name>
 ctree rebase
 ctree update
 ctree free
@@ -124,19 +113,6 @@ commits you want to keep, push, or re-check-out in a fresh worktree
 later, and ctree can't tell from the branch itself whether that's the
 case.
 
-### switch
-
-Drops you into a new shell at the chosen worktree's directory. The
-name must match the basename of an existing worktree (as shown by
-`ctree list`). Exits with an error if no worktree matches.
-
-Because `ctree` runs as a subprocess, it cannot `cd` your current
-shell directly — `switch` spawns a child shell at the target path,
-and `exit` returns you to where you invoked it from. To make `switch`
-behave like a true `cd` in the parent shell, wrap the binary in a
-shell function as described in Install above.
-
-### list
 
 Lists all worktrees for the current source repo. Each entry shows the
 worktree path and its checked-out branch.
@@ -215,7 +191,6 @@ ctree env check   # report discrepancies
 ctree env fix     # resolve discrepancies interactively
 ```
 
-#### list
 
 Prints all `KEY=VALUE` pairs from the worktree `.env`. No comparison
 with the source is performed.

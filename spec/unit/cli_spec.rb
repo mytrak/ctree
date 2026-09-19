@@ -75,14 +75,6 @@ RSpec.describe Ctree::CLI do
       expect(args).to eq("[command]")
     end
 
-    it "does not list shell-init in the Available Commands table" do
-      out = StringIO.new
-      $stdout = out
-      Ctree::CLI.run(["help"])
-      $stdout = STDOUT
-      expect(out.string).not_to include("shell-init")
-    end
-
     it "keeps the worktree-context footnote before the help footer" do
       captured = StringIO.new
       original_stdout = $stdout

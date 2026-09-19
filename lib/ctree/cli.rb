@@ -8,7 +8,6 @@ module Ctree
       ["create", "<worktree_name> <branch_name>", "create a sibling worktree on a branch"],
       ["delete", "<worktree_name>", "remove a worktree and its Docker resources"],
       ["list", "[all | free | used]", "list worktrees for the current source repo"],
-      ["switch", "<worktree_name>", "change directory into a worktree"],
       ["rebase", "", "rebase the worktree onto the source repo's master"],
       ["update", "", "sync images, volumes, and files from source"],
       ["free", "", "reset the worktree to a free placeholder branch"],
@@ -77,14 +76,6 @@ module Ctree
 
          --log-file <path> writes full output to <path> instead of the console.
          Implies --force (prompts are skipped; defaults are assumed).
-      HELP
-      "switch" => <<~HELP,
-        Usage:
-          ctree switch <worktree_name>
-
-        Changes your shell's working directory to the chosen worktree. Requires the
-        ctree shell function (see: ctree help shell-init). Without it, spawns a child
-        shell at the target path instead.
       HELP
       "list" => <<~HELP,
         Usage:
@@ -199,14 +190,6 @@ module Ctree
         resolver file at /etc/resolver/<tld> (requires sudo). "delete <tld>" removes
         both. "list" shows TLDs currently configured in dnsmasq and whether their
         resolver files are present.
-      HELP
-      "shell-init" => <<~HELP,
-        Usage:
-          ctree shell-init
-
-        Prints the ctree shell function. Eval its output in your shell profile so
-        that "ctree switch" changes the directory of your current shell rather than
-        spawning a child shell. Add to ~/.zshrc: eval "$(ctree shell-init)"
       HELP
       "version" => <<~HELP,
         Usage:
@@ -329,11 +312,6 @@ module Ctree
         with_logging(log_file, "deleting worktree #{name}", "deleted worktree #{name}") do
           Delete.run(name: name, force: force)
         end
-      when "switch"
-        usage_and_exit if argv.length != 2
-        name = argv[1]
-        Log.die invalid_name_message(name) unless name =~ NAME_PATTERN
-        Switch.run(name: name)
       when "update"
         usage_and_exit unless argv.length == 1
         with_logging(log_file, "updating worktree", "updated worktree") do
@@ -362,9 +340,6 @@ module Ctree
         with_logging(log_file, "syncing worktree", "synced worktree") do
           Sync.run(force: force)
         end
-      when "shell-init"
-        usage_and_exit unless argv.length == 1
-        ShellInit.run
       when "list"
         show_current = !argv.include?("--no-current")
         argv.delete("--no-current") # Remove flag from argv to clean up parsing
