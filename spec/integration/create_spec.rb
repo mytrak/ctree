@@ -35,11 +35,14 @@ RSpec.describe "Ctree::CLI create" do
     # ... reuse this file's existing successful `ctree create` setup/stubs ...
     FileUtils.mkdir_p((@work / ".ctree").to_s)
     File.write((@work / ".ctree" / "config.yml").to_s, "log_level: debug\nlog_prefix: false\n")
+    allow(Ctree::Prompt).to receive(:for_env_var_change) { |_key, value| value }
+    allow(Ctree::Prompt).to receive(:read_line).and_return("n")
     stub_clonefile
     stub_sh(docker_capture3: docker_stubs)
 
-    expect { Ctree::CLI.run(["create", "wt1"]) }
-      .to output(/=== create summary ===/).to_stdout
+    expect { Ctree::CLI.run(["create", "wt1", "wt1"]) }
+      .to raise_error(SystemExit) { |e| expect(e.status).to eq(0) }
+      .and output(/=== create summary ===/).to_stdout
   end
 
   it "rejects an invalid worktree name" do

@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0]
+
 - Fixed spinner in free command log
 - Removed confirmation prompt from free command
 - Added log prefix support for domain command
