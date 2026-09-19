@@ -27,12 +27,45 @@ RSpec.describe Ctree::LogFile do
       end
     end
 
-    it "truncates the file if it already has content" do
+    it "does not truncate the file if it already has content" do
       Dir.mktmpdir do |dir|
         path = File.join(dir, "ctree.log")
-        File.write(path, "stale content\n")
+        File.write(path, "existing content\n")
+        Ctree::LogFile.configure(path)
+        expect(File.read(path)).to include("existing content\n")
+      end
+    end
+
+    it "writes a run-boundary marker before appending to a non-empty file" do
+      Dir.mktmpdir do |dir|
+        path = File.join(dir, "ctree.log")
+        File.write(path, "existing content\n")
+        Ctree::LogFile.configure(path)
+        lines = File.readlines(path)
+        expect(lines[0]).to eq("existing content\n")
+        expect(lines[1]).to match(/\A--- log appended: \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} ---\n\z/)
+      end
+    end
+
+    it "does not write a run-boundary marker when the file exists but is empty" do
+      Dir.mktmpdir do |dir|
+        path = File.join(dir, "ctree.log")
+        FileUtils.touch(path)
         Ctree::LogFile.configure(path)
         expect(File.read(path)).to eq("")
+      end
+    end
+
+    it "appends new writes after the run-boundary marker" do
+      Dir.mktmpdir do |dir|
+        path = File.join(dir, "ctree.log")
+        File.write(path, "existing content\n")
+        Ctree::LogFile.configure(path)
+        Ctree::LogFile.write("new line")
+        lines = File.readlines(path)
+        expect(lines[0]).to eq("existing content\n")
+        expect(lines[1]).to match(/\A--- log appended: \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} ---\n\z/)
+        expect(lines[2]).to match(/\A\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\] new line\n\z/)
       end
     end
   end

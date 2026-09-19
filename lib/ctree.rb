@@ -113,7 +113,13 @@ module Ctree
 
     def configure(path)
       @path = path
-      File.write(@path, "")
+      if File.exist?(path) && !File.zero?(path)
+        File.open(path, "a") do |f|
+          f.puts("--- log appended: #{Time.now.strftime('%Y-%m-%d %H:%M:%S')} ---")
+        end
+      else
+        FileUtils.touch(path)
+      end
     end
 
     def enabled?

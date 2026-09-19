@@ -60,8 +60,9 @@ module Ctree
          --force skips all confirmation prompts (assuming the bracket default, or
          the shown value for per-var .env prompts) so create runs non-interactively.
 
-         --log-file <path> writes full output to <path> instead of the console.
-         Implies --force (prompts are skipped; defaults are assumed).
+         --log-file <path> writes full output to <path> instead of the console,
+         appending if it already exists (creating it otherwise). Implies
+         --force (prompts are skipped; defaults are assumed).
       HELP
       "delete" => <<~HELP,
         Usage:
@@ -74,8 +75,9 @@ module Ctree
 
          --force skips the confirmation prompt and proceeds with deletion.
 
-         --log-file <path> writes full output to <path> instead of the console.
-         Implies --force (prompts are skipped; defaults are assumed).
+         --log-file <path> writes full output to <path> instead of the console,
+         appending if it already exists (creating it otherwise). Implies
+         --force (prompts are skipped; defaults are assumed).
       HELP
       "list" => <<~HELP,
         Usage:
@@ -101,8 +103,9 @@ module Ctree
          prompt defaults to *not* proceeding — so --force with a non-default source
          branch will abort the update rather than forcing it through.
 
-         --log-file <path> writes full output to <path> instead of the console.
-         Implies --force (prompts are skipped; defaults are assumed).
+         --log-file <path> writes full output to <path> instead of the console,
+         appending if it already exists (creating it otherwise). Implies
+         --force (prompts are skipped; defaults are assumed).
       HELP
       "rebase" => <<~HELP,
         Usage:
@@ -121,8 +124,9 @@ module Ctree
          which defaults to *not* proceeding — so --force will abort a rebase run
          against a dirty worktree rather than forcing it through.
 
-         --log-file <path> writes full output to <path> instead of the console.
-         Implies --force (prompts are skipped; defaults are assumed).
+         --log-file <path> writes full output to <path> instead of the console,
+         appending if it already exists (creating it otherwise). Implies
+         --force (prompts are skipped; defaults are assumed).
       HELP
        "free" => <<~HELP,
         Usage:
@@ -207,8 +211,9 @@ module Ctree
 
          --force skips confirmations and assumes the default values.
 
-         --log-file <path> writes full output to <path> instead of the console.
-         Implies --force (prompts are skipped; defaults are assumed).
+         --log-file <path> writes full output to <path> instead of the console,
+         appending if it already exists (creating it otherwise). Implies
+         --force (prompts are skipped; defaults are assumed).
       HELP
     }.freeze
 
