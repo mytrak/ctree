@@ -99,6 +99,27 @@ RSpec.describe Ctree::LogFile do
     end
   end
 
+  describe "Log.debug writes to log file without DEBUG: prefix" do
+    around do |ex|
+      Dir.mktmpdir do |dir|
+        @log_path = File.join(dir, "ctree.log")
+        Ctree::LogFile.configure(@log_path)
+        ex.run
+      end
+      Ctree::LogFile.reset!
+      Ctree::Log.reset!
+    end
+
+    it "writes the message without a DEBUG: prefix" do
+      Ctree::Log.debug_mode = true
+      Ctree::Log.debug("this is a debug message")
+      lines = File.readlines(@log_path)
+      expect(lines.size).to eq(1)
+      expect(lines[0]).to match(/\A\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\] this is a debug message\n\z/)
+      expect(lines[0]).not_to include("DEBUG:")
+    end
+  end
+
   describe ".write_block" do
     it "is a no-op when not configured" do
       expect { Ctree::LogFile.write_block("hello\nworld") }.not_to raise_error
