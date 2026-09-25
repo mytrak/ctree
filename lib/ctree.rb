@@ -59,7 +59,7 @@ module Ctree
     def debug(msg)
       return unless @debug
       if LogFile.enabled?
-        LogFile.write("DEBUG: #{msg}")
+        LogFile.write(msg)
       else
         puts "#{prefix}#{msg}"
       end
