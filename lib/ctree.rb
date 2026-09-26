@@ -502,7 +502,7 @@ module Ctree
       Log.info "built ctree-rsync image"
     end
 
-    def copy_with_progress(src_vol, tgt_vol)
+    def copy_with_progress(src_vol, tgt_vol, live: true)
       # The same container that runs cp -a also samples /to size every 1s
       # and emits a PROGRESS line, so we get real byte-level progress
       # without spawning extra docker invocations.
@@ -535,7 +535,7 @@ module Ctree
       done = false
 
       live_progress = $stdout.tty? && !LogFile.enabled?
-      Log.debug "copying #{src_vol} -> #{tgt_vol}" unless live_progress
+      puts "copying #{src_vol} -> #{tgt_vol}" unless $stdout.tty?
 
       Sh.popen3(*cmd) do |_stdin, stdout, stderr, wait_thr|
         err_thread = Thread.new { err_buf << stderr.read.to_s }
@@ -580,7 +580,11 @@ module Ctree
       elapsed = (Time.now - start_time).to_i
       if exit_status.success?
         size_part = total_bytes && total_bytes > 0 ? "#{Sizes.human(total_bytes)} in " : ""
-        Log.debug "copied #{src_vol} -> #{tgt_vol} (#{size_part}#{elapsed}s)"
+        completion = "copied #{src_vol} -> #{tgt_vol} (#{size_part}#{elapsed}s)"
+        # The log file is user-requested output: the completion line is always
+        # recorded there, regardless of log_level (which only governs the console).
+        LogFile.write(completion) if LogFile.enabled?
+        Log.debug completion
       end
 
       [exit_status, err_buf, total_bytes]

@@ -126,13 +126,16 @@ RSpec.describe "Ctree::CLI create" do
 
       expect(log_output).to include("created worktree wt1")
       expect(log_output).to include("copied source content")
+      expect(log_output).not_to include("copying source content")
       expect(console_output).not_to include("copied source content")
       expect(console_output).to include("creating worktree wt1")
       expect(console_output).to match(/created worktree wt1 \(\d+s\)/)
       # Exactly the progress line and the completion line — no stray blank
       # line in between (e.g. from a raw `puts` bypassing LogFile.enabled?,
       # such as create.rb's promptable-.env-vars spacer).
-      expect(console_output).to match(/\A\[ctree\] creating worktree wt1\n\[ctree\] created worktree wt1 \(\d+s\)\n\z/)
+      # The plain "copying source content" line is always printed on the console
+      # (never to the log file), so it appears on stdout regardless of --log-file.
+      expect(console_output).to eq("[ctree] creating worktree wt1\ncopying source content\n[ctree] created worktree wt1 (0s)\n")
     end
 
     sibling = @work.parent / "wt1"
