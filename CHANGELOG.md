@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Removed the boundary marker from appended log files
 - Removed DEBUG: prefix from log file entries
 - Changed --log-file to append to an existing file instead of overwriting it
 - Removed switch and shell-init commands
