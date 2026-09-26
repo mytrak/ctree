@@ -161,7 +161,7 @@ module Ctree
       # On non-TTY the spinner doesn't run, so log the start explicitly.
       # On TTY the spinner itself is the start indicator — skip the static line
       # to avoid showing both "copying source content" and the spinner line.
-      Log.debug "copying source content" unless $stdout.tty? && !LogFile.enabled?
+      $stdout.puts "copying source content" unless $stdout.tty?
 
       state_mutex = Mutex.new
       done_count = 0
@@ -539,7 +539,9 @@ module Ctree
           next
         end
 
-        st, err, vol_bytes = Volume.copy_with_progress(src_vol, tgt_vol)
+        # Explicit intent: live progress semantics unchanged with or without
+        # --log-file; the log file only receives the past-tense completion line.
+        st, err, vol_bytes = Volume.copy_with_progress(src_vol, tgt_vol, live: true)
         if st.success?
           volume_copy_bytes += vol_bytes.to_i
           volume_results << [src_vol, tgt_vol, :copied, ""]
