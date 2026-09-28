@@ -127,11 +127,30 @@ module Ctree
       failed = results.any? { |st, _, _| st == :failed }
       if !failed && config[:post_rebase_hooks].any?
         post_rebase_hooks = config[:post_rebase_hooks]
-        Spinner.with_spinner("running post-rebase hooks") do
-          post_rebase_hooks.each do |cmd|
-            system(cmd)
-            Log.die "post-rebase hook failed: #{cmd}" unless $?.success?
+        post_rebase_hooks.each_with_index do |cmd, idx|
+          out = nil
+          if LogFile.enabled?
+            # Console output is already suppressed under --log-file,
+            # so the hook's own stdout/stderr must be captured here —
+            # otherwise a failing hook's real error output (e.g. a
+            # migration stack trace) never reaches the log file at all.
+            out, status = Sh.capture2e(cmd)
+          else
+            status = Spinner.with_spinner("running post-rebase hook: #{cmd}") do
+              Sh.system(cmd)
+              $?
+            end
           end
+
+          next if status.success?
+
+          detail = out.to_s.strip
+          # A failing hook's output is its diagnostic — show it on the
+          # console in every mode (also already in the log file under
+          # --log-file, where this line surfaces the failure inline).
+          warn detail unless LogFile.enabled?
+          summary = "post-rebase hook failed (exit #{status.exitstatus}): #{cmd}"
+          Log.die detail.empty? ? summary : "#{summary}\n#{detail}"
         end
       end
 

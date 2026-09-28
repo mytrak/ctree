@@ -70,6 +70,31 @@ RSpec.describe "Ctree::CLI sync" do
     expect((wt / "hook_ran").exist?).to be true
   end
 
+  it "dies on failing post-rebase hook with error output" do
+    system("git", "branch", "master")
+
+    wt = @parent / "wt2"
+    system("git", "worktree", "add", "-q", "-b", "feature-y", wt.to_s, out: File::NULL, err: File::NULL)
+
+    FileUtils.mkdir_p((wt / ".ctree").to_s)
+    File.write(
+      (wt / ".ctree" / "config.yml").to_s,
+      "post_rebase_hooks:\n  - /bin/sh -c 'echo DATABASE DOWN >&2; exit 1'\n",
+    )
+    system("git", "-C", wt.to_s, "add", ".ctree/config.yml", out: File::NULL, err: File::NULL)
+    system("git", "-C", wt.to_s, "commit", "-q", "-m", "add config", out: File::NULL, err: File::NULL)
+
+    allow(Ctree::Rebase).to receive(:exit)
+    allow(Ctree::Update).to receive(:run).and_return(0)
+
+    Dir.chdir(wt.to_s) do
+      expect {
+        Ctree::CLI.run(["sync"])
+      }.to output(/DATABASE DOWN/).to_stderr
+        .and raise_error(SystemExit) { |e| expect(e.status).to eq(1) }
+    end
+  end
+
   it "redirects output to --log-file" do
     Dir.mktmpdir do |log_dir|
       log_path = File.join(log_dir, "sync.log")
@@ -91,6 +116,40 @@ RSpec.describe "Ctree::CLI sync" do
       console_output = out.string
       expect(console_output).to include("syncing worktree")
       expect(console_output).to match(/synced worktree \(\d+s\)/)
+    end
+  end
+
+  it "writes full failing hook output to --log-file" do
+    Dir.mktmpdir do |log_dir|
+      log_path = File.join(log_dir, "sync.log")
+      Ctree::LogFile.configure(log_path)
+
+      system("git", "branch", "master")
+
+      wt = @parent / "wt_log"
+      system("git", "worktree", "add", "-q", "-b", "feature-log", wt.to_s, out: File::NULL, err: File::NULL)
+
+      FileUtils.mkdir_p((wt / ".ctree").to_s)
+      File.write(
+        (wt / ".ctree" / "config.yml").to_s,
+        "post_rebase_hooks:\n" \
+        "  - /bin/sh -c 'echo CRITICAL ERROR >&2; echo some detail; exit 1'\n",
+      )
+      system("git", "-C", wt.to_s, "add", ".ctree/config.yml", out: File::NULL, err: File::NULL)
+      system("git", "-C", wt.to_s, "commit", "-q", "-m", "add config", out: File::NULL, err: File::NULL)
+
+      allow(Ctree::Rebase).to receive(:exit)
+      allow(Ctree::Update).to receive(:run).and_return(0)
+
+      Dir.chdir(wt.to_s) do
+        expect { Ctree::CLI.run(["sync", "--log-file=#{log_path}"]) }
+          .to raise_error(SystemExit)
+      end
+
+      log_content = File.read(log_path)
+      expect(log_content).to include("CRITICAL ERROR")
+      expect(log_content).to include("some detail")
+      expect(log_content).to include("post-rebase hook failed")
     end
   end
 end

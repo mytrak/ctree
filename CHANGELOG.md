@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Show post rebase/update hook errors in log file
+
 ## [0.5.0] - 2026-09-25
 
 - Removed double action lines from log file

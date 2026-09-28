@@ -111,6 +111,10 @@ RSpec.describe "Ctree::CLI update" do
       system("git", "-C", @work.to_s, "worktree", "remove", "--force", wt.to_s,
              out: File::NULL, err: File::NULL)
     end
+    # Restore the source worktree to its default branch — the feature-branch
+    # checkout above would otherwise leak into specs that run after this one.
+    system("git", "-C", @work.to_s, "checkout", "-q", "main",
+           out: File::NULL, err: File::NULL)
   end
 
   it "aborts without prompting when --force is passed and the source is on a feature branch (prompt defaults to no)" do
@@ -141,6 +145,10 @@ RSpec.describe "Ctree::CLI update" do
       system("git", "-C", @work.to_s, "worktree", "remove", "--force", wt.to_s,
              out: File::NULL, err: File::NULL)
     end
+    # Restore the source worktree to its default branch — the feature-branch
+    # checkout above would otherwise leak into specs that run after this one.
+    system("git", "-C", @work.to_s, "checkout", "-q", "main",
+           out: File::NULL, err: File::NULL)
   end
 
   it "copies update file from source to worktree" do
@@ -508,6 +516,94 @@ RSpec.describe "Ctree::CLI update" do
       expect((wt / ".ctree" / "config.yml").read).to eq(
         "log_level: debug\n"
       )
+    ensure
+      if defined?(wt) && wt
+        system("git", "-C", @work.to_s, "worktree", "remove", "--force", wt.to_s,
+               out: File::NULL, err: File::NULL)
+      end
+    end
+  end
+
+  it "dies on failing post-update hook with error output" do
+    wt = @parent / "wt1"
+    system("git", "-C", @work.to_s, "worktree", "add", "-q", "-b", "wt1", wt.to_s,
+           out: File::NULL, err: File::NULL)
+    File.write((wt / ".env").to_s, "COMPOSE_PROJECT_NAME=wt1\n")
+    FileUtils.mkdir_p((wt / ".ctree").to_s)
+    File.write(
+      (wt / ".ctree" / "config.yml").to_s,
+      "post_update_hooks:\n  - /bin/sh -c 'echo DISK FULL >&2; exit 1'\n",
+    )
+    system("git", "-C", @work.to_s, "add", ".ctree/config.yml", out: File::NULL, err: File::NULL)
+    system("git", "-C", @work.to_s, "commit", "-q", "-m", "add config", out: File::NULL, err: File::NULL)
+
+    allow(Ctree::Rebase).to receive(:exit)
+
+    stub_sh(
+      docker_system: [true, true],
+      docker_capture3: [
+        ["", "", true],   # docker ps source (no containers)
+        ["", "", true],   # docker ps target (no containers)
+        ["", "", true],   # docker images
+        ["", "", true],   # docker volume ls (no source volumes)
+      ]
+    )
+
+    Dir.chdir(wt.to_s) do
+      expect {
+        Ctree::CLI.run(["update"])
+      }.to output(/DISK FULL/).to_stderr
+        .and raise_error(SystemExit) { |e| expect(e.status).to eq(1) }
+    end
+  ensure
+    if defined?(wt) && wt
+      system("git", "-C", @work.to_s, "worktree", "remove", "--force", wt.to_s,
+             out: File::NULL, err: File::NULL)
+    end
+  end
+
+  it "writes full failing hook output to --log-file" do
+    Dir.mktmpdir do |log_dir|
+      log_path = File.join(log_dir, "update.log")
+
+      wt = @parent / "wt_ulog"
+      system("git", "-C", @work.to_s, "worktree", "add", "-q", "-b", "wt-ulog", wt.to_s,
+             out: File::NULL, err: File::NULL)
+      File.write((wt / ".env").to_s, "COMPOSE_PROJECT_NAME=wt-ulog\n")
+      FileUtils.mkdir_p((wt / ".ctree").to_s)
+      File.write(
+        (wt / ".ctree" / "config.yml").to_s,
+        "post_update_hooks:\n" \
+        "  - /bin/sh -c 'echo POST UPDATE CRASHED >&2; echo stack trace here; exit 1'\n",
+      )
+      # Track the config on the worktree's own branch — otherwise the worktree
+      # checkout (branched from main before this commit) lacks .ctree/config.yml
+      # and the default config (log_level: info, no hooks) governs the update.
+      system("git", "-C", wt.to_s, "add", ".ctree/config.yml", out: File::NULL, err: File::NULL)
+      system("git", "-C", wt.to_s, "commit", "-q", "-m", "add config", out: File::NULL, err: File::NULL)
+
+      allow(Ctree::Rebase).to receive(:exit)
+
+      stub_sh(
+        docker_system: [true, true],
+        docker_capture3: [
+          ["", "", true],   # docker ps source (no containers)
+          ["", "", true],   # docker ps target (no containers)
+          ["", "", true],   # docker images
+          ["", "", true],   # docker volume ls (no source volumes)
+        ]
+      )
+
+      Dir.chdir(wt.to_s) do
+        expect {
+          Ctree::CLI.run(["update", "--log-file=#{log_path}"])
+        }.to raise_error(SystemExit)
+      end
+
+      log_content = File.read(log_path)
+      expect(log_content).to include("POST UPDATE CRASHED")
+      expect(log_content).to include("stack trace here")
+      expect(log_content).to include("post-update hook failed")
     ensure
       if defined?(wt) && wt
         system("git", "-C", @work.to_s, "worktree", "remove", "--force", wt.to_s,
