@@ -279,27 +279,34 @@ module Ctree
 
       post_update_hooks = config[:post_update_hooks]
       unless post_update_hooks.empty?
-        run_post_update_hooks = lambda do
-          post_update_hooks.each_with_index do |cmd, idx|
-            label = "post-update hook #{idx + 1}/#{post_update_hooks.size}"
-            if Log.debug?
-              Spinner.with_spinner("running #{label}: #{cmd}") { system(cmd) }
-            else
-              system(cmd)
-            end
-            unless $?.success?
-              Log.die "post-update hook failed (exit #{$?.exitstatus}): #{cmd}"
+        post_update_hooks.each_with_index do |cmd, idx|
+          label = "post-update hook #{idx + 1}/#{post_update_hooks.size}"
+          out = nil
+          if LogFile.enabled?
+            # Console output is already suppressed under --log-file
+            # (Log.info/Log.warn_ route to the file only), so the hook's
+            # own stdout/stderr must be captured here — otherwise a
+            # failing hook's real error output (e.g. a migration stack
+            # trace) never reaches the log file at all.
+            out, status = Sh.capture2e(cmd)
+          else
+            status = Spinner.with_spinner("running #{label}: #{cmd}") do
+              Sh.system(cmd)
+              $?
             end
           end
-        end
 
-        post_start = Time.now
-        if Log.debug?
-          run_post_update_hooks.call
-        else
-          Spinner.with_spinner("running post-update hooks") { run_post_update_hooks.call }
+          detail = out.to_s.strip
+          Log.info detail unless detail.empty?
+          next if status.success?
+
+          # A failing hook's output is its diagnostic — show it on the
+          # console in every mode (also already in the log file under
+          # --log-file, where this line surfaces the failure inline).
+          warn detail unless LogFile.enabled?
+          summary = "post-update hook failed (exit #{status.exitstatus}): #{cmd}"
+          Log.die detail.empty? ? summary : "#{summary}\n#{detail}"
         end
-        Log.info "ran post-update hooks (#{(Time.now - post_start).to_i}s)"
       end
 
       if Log.debug?

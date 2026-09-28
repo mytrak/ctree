@@ -41,8 +41,7 @@ module Ctree
       @log_prefix = val
     end
 
-    # Test-only: specs run in one process, so state must be reset between
-    # examples.
+    # Test-only: specs run in one process, so state must be reset between examples
     def reset!
       @debug = false
       @log_prefix = true
@@ -85,10 +84,12 @@ module Ctree
       if LogFile.enabled?
         LogFile.write("ERROR: #{msg}")
         Scroller.stop
-        warn "#{prefix}ERROR: #{msg} (see #{LogFile.path} for details)"
-      else
-        warn "#{prefix}ERROR: #{msg}"
       end
+
+      # Always show the full message — for hook failures it is the
+      # error output, and the log file already holds the same text
+      warn "#{prefix}ERROR: #{msg}"
+      $stderr.flush
       exit code
     end
 
@@ -146,8 +147,7 @@ module Ctree
       end
     end
 
-    # Test-only: specs run in one process, so state must be reset between
-    # examples.
+    # Test-only: specs run in one process, so state must be reset between examples
     def reset!
       @path = nil
     end
@@ -225,6 +225,13 @@ module Ctree
 
     def capture3(*cmd, **opts)
       Open3.capture3(*cmd, **opts)
+    end
+
+    # Merged stdout+stderr, in the order the subprocess produced it — used
+    # where we need a single readable transcript (e.g. a failing hook's
+    # interleaved progress/error output) rather than two separate buffers.
+    def capture2e(*cmd, **opts)
+      Open3.capture2e(*cmd, **opts)
     end
 
     def popen3(*cmd, &blk)
