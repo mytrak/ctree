@@ -607,7 +607,6 @@ module Ctree
         # The log file is user-requested output: the completion line is always
         # recorded there, regardless of log_level (which only governs the console).
         LogFile.write(completion) if LogFile.enabled?
-        Log.debug completion
       end
 
       [exit_status, err_buf, total_bytes]

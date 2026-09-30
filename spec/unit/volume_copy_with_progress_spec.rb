@@ -48,6 +48,28 @@ RSpec.describe Ctree::Volume do
         log_contents = File.read(log_path)
         expect(log_contents).not_to include("copying src_vol -> tgt_vol")
         expect(log_contents).to match(/copied src_vol -> tgt_vol \(\S+ in \d+s\)/)
+        expect(log_contents.scan("copied src_vol -> tgt_vol").size).to eq(1)
+      end
+    ensure
+      Ctree::LogFile.reset!
+    end
+
+    it "does not duplicate the completion line in the log file when debug mode is on (CTR-055)" do
+      Dir.mktmpdir do |dir|
+        log_path = File.join(dir, "ctree.log")
+        Ctree::LogFile.configure(log_path)
+        stub_popen3(lines: ["TOTAL:100\n", "PROGRESS:100\n"])
+
+        original_stdout = $stdout
+        $stdout = StringIO.new
+        begin
+          Ctree::Volume.copy_with_progress("src_vol", "tgt_vol", live: true)
+        ensure
+          $stdout = original_stdout
+        end
+
+        completion_lines = File.readlines(log_path).select { |l| l.include?("copied src_vol -> tgt_vol") }
+        expect(completion_lines.size).to eq(1)
       end
     ensure
       Ctree::LogFile.reset!
@@ -65,7 +87,6 @@ RSpec.describe Ctree::Volume do
         $stdout = original_stdout
       end
       expect(out.string).to include("copying src_vol -> tgt_vol")
-      expect(out.string).to include("copied src_vol -> tgt_vol")
     end
 
     it "still prints the present-tense line on the console when --log-file is active (non-TTY)" do
