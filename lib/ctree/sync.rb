@@ -11,7 +11,12 @@ module Ctree
       end
 
       begin
-        Ctree::Rebase.run(force: force)
+        begin
+          Ctree::Rebase.run(force: force)
+        rescue SystemExit => e
+          exit e.status unless e.success?
+        end
+
         Ctree::Update.run(force: force)
       ensure
         if log_file

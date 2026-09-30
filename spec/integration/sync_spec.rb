@@ -45,6 +45,65 @@ RSpec.describe "Ctree::CLI sync" do
     expect(Ctree::Update).not_to have_received(:run)
   end
 
+  it "runs update after a real, successful rebase (no premature exit)" do
+    system("git", "branch", "master")
+
+    wt = @parent / "wt3"
+    system("git", "worktree", "add", "-q", "-b", "feature-z", wt.to_s, out: File::NULL, err: File::NULL)
+
+    allow(Ctree::Update).to receive(:run).and_return(:ok)
+
+    Dir.chdir(wt.to_s) do
+      Ctree::CLI.run(["sync"])
+    end
+
+    expect(Ctree::Update).to have_received(:run).with(force: false)
+  end
+
+  it "does not run update when an embedded repo fails to rebase" do
+    system("git", "branch", "master")
+
+    # Embedded repo with diverging, conflicting history on master vs. the worktree.
+    plugin_src = @work / "gems" / "plugins" / "conflicting_plugin"
+    FileUtils.mkdir_p(plugin_src.to_s)
+    system("git", "-C", plugin_src.to_s, "init", "-q", "-b", "master", out: File::NULL, err: File::NULL)
+    system("git", "-C", plugin_src.to_s, "config", "user.email", "test@example.com")
+    system("git", "-C", plugin_src.to_s, "config", "user.name", "Test")
+    File.write((plugin_src / "file.txt").to_s, "source version\n")
+    system("git", "-C", plugin_src.to_s, "add", "file.txt", out: File::NULL, err: File::NULL)
+    system("git", "-C", plugin_src.to_s, "commit", "-q", "-m", "source change", out: File::NULL, err: File::NULL)
+
+    wt = @parent / "wt4"
+    system("git", "worktree", "add", "-q", "-b", "feature-conflict", wt.to_s, out: File::NULL, err: File::NULL)
+
+    FileUtils.mkdir_p((wt / ".ctree").to_s)
+    File.write((wt / ".ctree" / "config.yml").to_s, "rebase:\n  - gems/plugins\n")
+    # Embedded repos are vendored, unregistered nested .git dirs, so they must be
+    # gitignored — otherwise the parent's own uncommitted-changes check (which
+    # runs before rebasing anything) sees them as untracked and aborts first.
+    File.write((wt / ".gitignore").to_s, "gems/plugins/conflicting_plugin/\n")
+    system("git", "-C", wt.to_s, "add", ".ctree/config.yml", ".gitignore", out: File::NULL, err: File::NULL)
+    system("git", "-C", wt.to_s, "commit", "-q", "-m", "add config", out: File::NULL, err: File::NULL)
+
+    plugin_wt = wt / "gems" / "plugins" / "conflicting_plugin"
+    FileUtils.mkdir_p(plugin_wt.dirname.to_s)
+    system("git", "clone", "-q", plugin_src.to_s, plugin_wt.to_s, out: File::NULL, err: File::NULL)
+    File.write((plugin_wt / "file.txt").to_s, "worktree version\n")
+    system("git", "-C", plugin_wt.to_s, "commit", "-q", "-am", "worktree change", out: File::NULL, err: File::NULL)
+    File.write((plugin_src / "file.txt").to_s, "source version, changed again\n")
+    system("git", "-C", plugin_src.to_s, "commit", "-q", "-am", "conflicting source change", out: File::NULL, err: File::NULL)
+
+    allow(Ctree::Update).to receive(:run)
+
+    Dir.chdir(wt.to_s) do
+      expect {
+        Ctree::CLI.run(["sync"])
+      }.to raise_error(SystemExit) { |e| expect(e.status).to eq(2) }
+    end
+
+    expect(Ctree::Update).not_to have_received(:run)
+  end
+
   it "executes post_rebase_hooks if they exist" do
     # Ctree::Rebase.run rebases onto the source's local "master" branch by
     # name, so the source needs one in addition to its default "main".
@@ -58,9 +117,8 @@ RSpec.describe "Ctree::CLI sync" do
     system("git", "-C", wt.to_s, "add", ".ctree/config.yml", out: File::NULL, err: File::NULL)
     system("git", "-C", wt.to_s, "commit", "-q", "-m", "add config", out: File::NULL, err: File::NULL)
 
-    # Let the real Rebase.run execute (it's what runs the hooks); only
-    # swallow its mandatory exit and stub away Update, which needs docker.
-    allow(Ctree::Rebase).to receive(:exit)
+    # Let the real Rebase.run execute (it's what runs the hooks); stub away
+    # Update, which needs docker.
     allow(Ctree::Update).to receive(:run).and_return(0)
 
     Dir.chdir(wt.to_s) do
@@ -84,7 +142,6 @@ RSpec.describe "Ctree::CLI sync" do
     system("git", "-C", wt.to_s, "add", ".ctree/config.yml", out: File::NULL, err: File::NULL)
     system("git", "-C", wt.to_s, "commit", "-q", "-m", "add config", out: File::NULL, err: File::NULL)
 
-    allow(Ctree::Rebase).to receive(:exit)
     allow(Ctree::Update).to receive(:run).and_return(0)
 
     Dir.chdir(wt.to_s) do
