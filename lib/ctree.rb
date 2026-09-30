@@ -343,6 +343,8 @@ module Ctree
     def with_spinner(msg)
       # msg is a present-tense progress label; skip it under --log-file so
       # the file only ever gets each call site's past-tense completion line.
+      # Two Spinner modes: with_spinner animates for short ops; with_progress
+      # prints a single line and does not redraw — use for chatty hooks.
       return yield if LogFile.enabled?
 
       unless $stdout.tty?
@@ -381,6 +383,20 @@ module Ctree
       end
 
       result
+    end
+
+    # Like with_spinner but without the rotating frame / elapsed redraw:
+    # prints a single stable progress line before yielding, then yields
+    # with stdout left alone. Use this for blocks whose child process
+    # writes to the same TTY (e.g. post-update hooks): the \r\e[K redraw
+    # loop would interleave with and corrupt that output.
+    def with_progress(msg)
+      return yield if LogFile.enabled?
+
+      # Plain puts matches with_spinner's non-TTY output so captured/CI
+      # output is unchanged: one line, same text, same prefix.
+      puts "#{Ctree::Log.prefix}#{msg}"
+      yield
     end
 
     def render_progress(current, total, start_time, spinner)

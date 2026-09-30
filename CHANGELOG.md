@@ -7,8 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Removed display of spinner for post rebase/update hooks
 - Fixed sync exiting after rebase without running update
-- Show post rebase/update hook errors in log file
+- Added errors from post rebase/update hooks in log file
 
 ## [0.5.0] - 2026-09-25
 

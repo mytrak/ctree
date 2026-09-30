@@ -290,7 +290,7 @@ module Ctree
             # trace) never reaches the log file at all.
             out, status = Sh.capture2e(cmd)
           else
-            status = Spinner.with_spinner("running #{label}: #{cmd}") do
+            status = Spinner.with_progress("running #{label}: #{cmd}") do
               Sh.system(cmd)
               $?
             end
