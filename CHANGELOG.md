@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Fixed duplicate "copied ..." lines in log file
 - Removed display of spinner for post rebase/update hooks
 - Fixed sync exiting after rebase without running update
 - Added errors from post rebase/update hooks in log file
