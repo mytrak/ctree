@@ -612,6 +612,49 @@ RSpec.describe "Ctree::CLI update" do
     end
   end
 
+    it "runs post-update hooks without spinner redraws interleaving hook output" do
+      wt = @parent / "wt_hooks"
+      system("git", "-C", @work.to_s, "worktree", "add", "-q", "-b", "wt-hooks", wt.to_s,
+             out: File::NULL, err: File::NULL)
+      File.write((wt / ".env").to_s, "COMPOSE_PROJECT_NAME=wt-hooks\n")
+      FileUtils.mkdir_p((wt / ".ctree").to_s)
+      File.write(
+        (wt / ".ctree" / "config.yml").to_s,
+        "post_update_hooks:\n  - /bin/sh -c 'echo line one; echo line two'\n",
+      )
+      system("git", "-C", wt.to_s, "add", ".ctree/config.yml", out: File::NULL, err: File::NULL)
+      system("git", "-C", wt.to_s, "commit", "-q", "-m", "add config", out: File::NULL, err: File::NULL)
+
+      allow(Ctree::Rebase).to receive(:exit)
+      stub_sh(
+        docker_system: [true, true],
+        docker_capture3: [
+          ["", "", true], # docker ps source
+          ["", "", true], # docker ps target
+          ["", "", true], # docker images
+          ["", "", true], # docker volume ls
+        ]
+      )
+
+      Dir.chdir(wt.to_s) do
+        captured = capture_stdout do
+          expect { Ctree::CLI.run(["update"]) }
+            .to raise_error(SystemExit) { |e| expect(e.status).to eq(0) }
+        end
+
+        expect(captured).to include("running post-update hook 1/1:")
+        expect(captured).to include("line one")
+        expect(captured).to include("line two")
+        # No rotating frames, elapsed redraws, or line-erase sequences:
+        expect(captured).not_to include("\r")
+      end
+    ensure
+      if defined?(wt) && wt
+        system("git", "-C", @work.to_s, "worktree", "remove", "--force", wt.to_s,
+               out: File::NULL, err: File::NULL)
+      end
+    end
+
   def capture_stdout
     original = $stdout
     $stdout = StringIO.new

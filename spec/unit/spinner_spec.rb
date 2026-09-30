@@ -56,5 +56,56 @@ RSpec.describe Ctree::Spinner do
         expect(result).to include("rebasing free003 onto master")
       end
     end
+  describe ".with_progress" do
+    context "with a log file configured" do
+      around do |ex|
+        Dir.mktmpdir do |dir|
+          @log_path = File.join(dir, "ctree.log")
+          Ctree::LogFile.configure(@log_path)
+          ex.run
+        end
+        Ctree::LogFile.reset!
+      end
+
+      it "yields silently under --log-file" do
+        result = Ctree::Spinner.with_progress("progress msg") { :done }
+        expect(result).to eq(:done)
+        expect(File.read(@log_path)).to eq("")
+      end
+    end
+
+    context "without a log file" do
+      it "returns the block result" do
+        expect(Ctree::Spinner.with_progress("label") { 42 }).to eq(42)
+      end
+
+      it "prints one prefixed line on non-TTY stdout and does not redraw" do
+        $stdout = StringIO.new
+        allow($stdout).to receive(:tty?).and_return(false)
+        out = Ctree::Spinner.with_progress("running hook") { :done }
+        expect($stdout.string).to eq("[ctree] running hook\n")
+        expect($stdout.string).not_to include("\r")
+        expect(out).to eq(:done)
+      end
+
+      it "prints the same single line on TTY stdout (no spinner frames)" do
+        $stdout = StringIO.new
+        allow($stdout).to receive(:tty?).and_return(true)
+        out = String.new
+        $stdout.string = out
+        Ctree::Spinner.with_progress("running hook") { out << "hook-output\n" }
+        expect(out).to eq("[ctree] running hook\nhook-output\n")
+        expect(out).not_to include("(")
+        expect(out).not_to include("\r")
+      end
+
+      it "propagates exceptions from the block" do
+        $stdout = StringIO.new
+        allow($stdout).to receive(:tty?).and_return(false)
+        expect { Ctree::Spinner.with_progress("x") { raise "boom" } }
+          .to raise_error("boom")
+      end
+    end
+  end
   end
 end
