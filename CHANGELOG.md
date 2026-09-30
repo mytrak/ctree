@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Fixed sync exiting after rebase without running update
 - Show post rebase/update hook errors in log file
 
 ## [0.5.0] - 2026-09-25
