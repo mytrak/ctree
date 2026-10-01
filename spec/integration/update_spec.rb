@@ -275,7 +275,7 @@ RSpec.describe "Ctree::CLI update" do
     end
   end
 
-  it "prints the debug summary header as '=== update summary ==='" do
+  it "prints debug summary header" do
     FileUtils.mkdir_p((@work / ".ctree").to_s)
     File.write((@work / ".ctree" / "config.yml").to_s, "log_level: debug\n")
     system("git", "-C", @work.to_s, "add", ".ctree",
@@ -662,5 +662,44 @@ RSpec.describe "Ctree::CLI update" do
     $stdout.string
   ensure
     $stdout = original
+  end
+
+  it "does not write update summary block to the log file" do
+    FileUtils.mkdir_p((@work / ".ctree").to_s)
+    File.write((@work / ".ctree" / "config.yml").to_s, "log_level: debug\n")
+
+    stub_sh(
+      docker_system: [true],
+      docker_capture3: [
+        ["", "", true],   # docker info
+        ["", "", true],   # docker ps source
+        ["", "", true],   # docker ps target
+        ["", "", true],   # docker images source
+        ["", "", true],   # docker images target
+        ["", "", true],   # docker volume ls
+      ]
+    )
+
+    Dir.mktmpdir do |log_dir|
+      log_path = File.join(log_dir, "ctree.log")
+      wt = @parent / "wt_update_summary"
+      system("git", "-C", @work.to_s, "worktree", "add", "-q", "-b", "wt_update_summary", wt.to_s,
+             out: File::NULL, err: File::NULL)
+      File.write((wt / ".env").to_s, "COMPOSE_PROJECT_NAME=wt_update_summary\n")
+
+      Dir.chdir(wt.to_s) do
+        expect {
+          Ctree::CLI.run(["update", "--log-file=#{log_path}"])
+        }.to raise_error(SystemExit) { |e| expect(e.status).to eq(0) }
+
+        expect(File.read(log_path)).not_to match(/=== update summary ===/)
+      end
+    ensure
+      Ctree::LogFile.reset!
+      if defined?(wt) && wt
+        system("git", "-C", @work.to_s, "worktree", "remove", "--force", wt.to_s,
+               out: File::NULL, err: File::NULL)
+      end
+    end
   end
 end

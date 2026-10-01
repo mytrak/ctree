@@ -10,7 +10,7 @@ RSpec.describe "Ctree::Rebase debug summary" do
     end
   end
 
-  it "prints '=== rebase summary ===' when log_level is debug" do
+  it "prints rebase summary when log_level is debug" do
     allow(Ctree::Sh).to receive(:capture3) do |*cmd|
       case [cmd[0], cmd[3], cmd[4]]
       when ["git", "rev-parse", "--show-toplevel"]  then [@target.to_s, "", fake_status(true)]
@@ -21,13 +21,34 @@ RSpec.describe "Ctree::Rebase debug summary" do
       else raise "unexpected: #{cmd.inspect}"
       end
     end
-    allow(Ctree::Config).to receive(:load)
-      .and_return(Ctree::Config.defaults.merge(log_level: "debug"))
-    allow(Ctree::Rebase).to receive(:embedded_repos).and_return([])
-    allow(Ctree::Rebase).to receive(:exit)
-
+    allow(Ctree::Config).to receive(:load).and_return(Ctree::Config.defaults)
     expect { Ctree::Rebase.run }
       .to output(/=== rebase summary ===/).to_stdout
+  end
+
+  it "does not write rebase summary to the log file when forced" do
+    Dir.mktmpdir do |log_dir|
+      @log_path = File.join(log_dir, "test.log")
+      Ctree::LogFile.configure(@log_path)
+      allow(Ctree::Sh).to receive(:capture3) do |*cmd|
+        case [cmd[0], cmd[3], cmd[4]]
+        when ["git", "rev-parse", "--show-toplevel"] then [@target.to_s, "", fake_status(true)]
+        when ["git", "rev-parse", "--git-common-dir"] then ["../.git", "", fake_status(true)]
+        when ["git", "rev-parse", "--abbrev-ref"] then ["master", "", fake_status(true)]
+        when ["git", "merge-base", "--is-ancestor"] then ["", "", fake_status(false)]
+        when ["git", "status", "--porcelain"] then ["", "", fake_status(true)]
+        else raise "unexpected: #{cmd.inspect}"
+        end
+      end
+      allow(Ctree::Config).to receive(:load).and_return(Ctree::Config.defaults)
+        .and_return(Ctree::Config.defaults.merge(log_level: "debug"))
+      allow(Ctree::Rebase).to receive(:embedded_repos).and_return([])
+      allow(Ctree::Rebase).to receive(:exit)
+
+      Ctree::Rebase.run(force: true)
+      expect(File.read(@log_path)).not_to match(/=== rebase summary ===/)
+      Ctree::LogFile.reset!
+    end
   end
 end
 

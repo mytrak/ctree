@@ -120,7 +120,8 @@ module Ctree
           lines << line
         end
         lines << ""
-        Log.section(lines.join("\n"))
+        # Debug-only console report: never write the block to the log file.
+        Log.section(lines.join("\n"), interactive: true, force: force)
       end
 
       # === post-rebase hooks ===

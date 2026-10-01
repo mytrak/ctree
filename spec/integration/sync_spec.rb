@@ -209,4 +209,25 @@ RSpec.describe "Ctree::CLI sync" do
       expect(log_content).to include("post-rebase hook failed")
     end
   end
+
+  it "does not write rebase/update summary blocks to the log file" do
+    FileUtils.mkdir_p((@work / ".ctree").to_s)
+    File.write((@work / ".ctree" / "config.yml").to_s, "log_level: debug\n")
+
+    allow(Ctree::Rebase).to receive(:run).and_return(0)
+    allow(Ctree::Update).to receive(:run).and_return(0)
+
+    Dir.mktmpdir do |log_dir|
+      log_path = File.join(log_dir, "sync.log")
+      Dir.chdir(@work.to_s) do
+        Ctree::CLI.run(["sync", "--log-file=#{log_path}"])
+      end
+
+      log_content = File.read(log_path)
+      expect(log_content).not_to match(/=== rebase summary ===/)
+      expect(log_content).not_to match(/=== update summary ===/)
+    ensure
+      Ctree::LogFile.reset!
+    end
+  end
 end
