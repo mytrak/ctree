@@ -668,7 +668,9 @@ module Ctree
           lines << ""
         end
 
-        Log.section(lines.join("\n"))
+        # Debug-only console report: never write the block to the log file
+        # (per-line progress is already logged by the individual steps).
+        Log.section(lines.join("\n"), interactive: true, force: force)
       end
 
       any_failed = volume_results.any? { |_, _, st, _| st == :failed }

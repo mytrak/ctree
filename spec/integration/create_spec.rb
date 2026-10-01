@@ -31,7 +31,7 @@ RSpec.describe "Ctree::CLI create" do
     end
   end
 
-  it "prints the debug summary header as '=== create summary ===' regardless of log_prefix" do
+  it "prints debug summary header regardless of log_prefix" do
     # ... reuse this file's existing successful `ctree create` setup/stubs ...
     FileUtils.mkdir_p((@work / ".ctree").to_s)
     File.write((@work / ".ctree" / "config.yml").to_s, "log_level: debug\nlog_prefix: false\n")
@@ -904,6 +904,27 @@ RSpec.describe "Ctree::CLI create" do
 
       system("git", "-C", @work.to_s, "worktree", "remove", "--force", sibling.to_s,
              out: File::NULL, err: File::NULL)
+    end
+
+    it "does not write create summary block to the log file" do
+      FileUtils.mkdir_p((@work / ".ctree").to_s)
+      File.write((@work / ".ctree" / "config.yml").to_s, "log_level: debug\n")
+
+      allow(Ctree::Prompt).to receive(:for_env_var_change) { |_key, value| value }
+      allow(Ctree::Prompt).to receive(:read_line).and_return("n")
+      stub_clonefile
+      stub_sh(docker_capture3: docker_stubs)
+
+      Dir.mktmpdir do |log_dir|
+        log_path = File.join(log_dir, "ctree.log")
+        expect {
+          Ctree::CLI.run(["create", "wt1", "wt1", "--log-file=#{log_path}"])
+        }.to raise_error(SystemExit) { |e| expect(e.status).to eq(0) }
+
+        expect(File.read(log_path)).not_to match(/=== create summary ===/)
+      ensure
+        Ctree::LogFile.reset!
+      end
     end
   end
 end

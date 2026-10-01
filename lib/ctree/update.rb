@@ -340,7 +340,8 @@ module Ctree
           end
         end
 
-        Log.section(lines.join("\n"))
+        # Debug-only console report: never write the block to the log file.
+        Log.section(lines.join("\n"), interactive: true, force: force)
       end
 
       exit(failed ? 2 : 0)
