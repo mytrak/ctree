@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-10-01
+
+- Improved rebase and update log messages
 - Removed summary blocks from log file
 - Fixed duplicate "copied ..." lines in log file
 - Removed display of spinner for post rebase/update hooks

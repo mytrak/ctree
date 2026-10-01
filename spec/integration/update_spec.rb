@@ -223,7 +223,10 @@ RSpec.describe "Ctree::CLI update" do
         expect(console_output).to match(/updated worktree \(\d+s\)/)
       end
 
-      expect(File.read(log_path)).to include("updated worktree")
+      log_content = File.read(log_path)
+      expect(log_content).to include("updating worktree wt1 from src")
+      expect(log_content).to match(/worktree:\s+#{Regexp.escape(wt.realpath.to_s)}/)
+      expect(log_content).to match(/source:\s+#{Regexp.escape(@work.realpath.to_s)}/)
     end
   ensure
     if defined?(wt) && wt

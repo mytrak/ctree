@@ -42,6 +42,7 @@ module Ctree
       Log.log_prefix = config[:log_prefix]
       rebase_repo_paths = config[:rebase]
 
+      Log.info "rebasing worktree #{target_path.basename} from #{source_root.basename}"
       Log.info "worktree:  #{target_path}  [#{current_branch}]"
       Log.info "source:    #{source_root}"
 
