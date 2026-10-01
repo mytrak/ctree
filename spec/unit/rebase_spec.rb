@@ -91,6 +91,26 @@ RSpec.describe "Ctree::Rebase main branch skip logic" do
     end
     expect { Ctree::Rebase.run }.to output(/rebased CTR-001 onto master/).to_stdout
   end
+
+  it "prints the streamlined header to the console" do
+    stub_run_up_to(@target, @source, branch: "CTR-001", ancestor: true)
+    expect { Ctree::Rebase.run }
+      .to output(/rebasing worktree worktree from /).to_stdout
+  end
+
+  it "writes the header to the log file at info level" do
+    Dir.mktmpdir do |log_dir|
+      log_path = File.join(log_dir, "test.log")
+      Ctree::LogFile.configure(log_path)
+      stub_run_up_to(@target, @source, branch: "CTR-001", ancestor: true)
+      Ctree::Rebase.run(force: true)
+      content = File.read(log_path)
+      expect(content).to match(/rebasing worktree worktree from .*/)
+      expect(content).to match(/worktree:\s+#{Regexp.escape(@target.to_s)}/)
+      expect(content).to match(/source:\s+#{Regexp.escape(@source.to_s)}/)
+      Ctree::LogFile.reset!
+    end
+  end
 end
 
 RSpec.describe "Ctree::Rebase uncommitted-changes prompt and --force" do

@@ -59,9 +59,9 @@ module Ctree
         Log.die "invalid ctree override file. run 'ctree compose-config fix' to fix"
       end
 
-      Log.info "updated worktree #{target_path.basename} from #{source_root.basename}"
-      Log.debug "source project (compose):  #{source_project}  [#{source_root}]"
-      Log.debug "target project (compose):  #{target_project}  [#{target_path}]"
+      Log.info "updating worktree #{target_path.basename} from #{source_root.basename}"
+      Log.info "worktree:  #{target_path}"
+      Log.info "source:    #{source_root}"
 
       # === docker preflight ===
 
