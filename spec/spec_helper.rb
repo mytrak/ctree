@@ -18,6 +18,27 @@ RSpec.configure do |config|
   config.order = :random
   Kernel.srand config.seed
 
+  # RSpec doesn't rescue SystemExit, so an unstubbed `exit` (e.g. via Log.die)
+  # silently aborts the whole run. Turn it into a failure of that example.
+  config.around do |example|
+    example.run
+  rescue SystemExit => e
+    example.example.set_exception(
+      RuntimeError.new("unexpected exit(#{e.status}) — stub Kernel#exit or expect SystemExit")
+    )
+  end
+
+  # App output ([ctree] ...) would interleave with the documentation formatter.
+  config.around do |example|
+    original_stdout = $stdout
+    original_stderr = $stderr
+    $stdout = StringIO.new
+    $stderr = StringIO.new
+    example.run
+  ensure
+    $stdout = original_stdout
+    $stderr = original_stderr
+  end
   config.after do
     Ctree::LogFile.reset!
     Ctree::Log.reset!
