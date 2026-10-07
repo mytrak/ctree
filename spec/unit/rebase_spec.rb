@@ -21,7 +21,10 @@ RSpec.describe "Ctree::Rebase debug summary" do
       else raise "unexpected: #{cmd.inspect}"
       end
     end
-    allow(Ctree::Config).to receive(:load).and_return(Ctree::Config.defaults)
+    allow(Ctree::Config).to receive(:load)
+      .and_return(Ctree::Config.defaults.merge(log_level: "debug"))
+    allow(Ctree::Rebase).to receive(:embedded_repos).and_return([])
+    allow(Ctree::Rebase).to receive(:exit)
     expect { Ctree::Rebase.run }
       .to output(/=== rebase summary ===/).to_stdout
   end
@@ -34,9 +37,10 @@ RSpec.describe "Ctree::Rebase debug summary" do
         case [cmd[0], cmd[3], cmd[4]]
         when ["git", "rev-parse", "--show-toplevel"] then [@target.to_s, "", fake_status(true)]
         when ["git", "rev-parse", "--git-common-dir"] then ["../.git", "", fake_status(true)]
-        when ["git", "rev-parse", "--abbrev-ref"] then ["master", "", fake_status(true)]
+        when ["git", "rev-parse", "--abbrev-ref"] then ["CTR-001", "", fake_status(true)]
         when ["git", "merge-base", "--is-ancestor"] then ["", "", fake_status(false)]
         when ["git", "status", "--porcelain"] then ["", "", fake_status(true)]
+        when ["git", "rebase", "master"] then ["", "", fake_status(true)]
         else raise "unexpected: #{cmd.inspect}"
         end
       end
