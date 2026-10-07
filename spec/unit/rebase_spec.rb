@@ -11,6 +11,7 @@ RSpec.describe "Ctree::Rebase debug summary" do
   end
 
   it "prints rebase summary when log_level is debug" do
+    allow(Ctree::Git).to receive(:detect_default_branch).and_return("master")
     allow(Ctree::Sh).to receive(:capture3) do |*cmd|
       case [cmd[0], cmd[3], cmd[4]]
       when ["git", "rev-parse", "--show-toplevel"]  then [@target.to_s, "", fake_status(true)]
@@ -33,6 +34,7 @@ RSpec.describe "Ctree::Rebase debug summary" do
     Dir.mktmpdir do |log_dir|
       @log_path = File.join(log_dir, "test.log")
       Ctree::LogFile.configure(@log_path)
+      allow(Ctree::Git).to receive(:detect_default_branch).and_return("master")
       allow(Ctree::Sh).to receive(:capture3) do |*cmd|
         case [cmd[0], cmd[3], cmd[4]]
         when ["git", "rev-parse", "--show-toplevel"] then [@target.to_s, "", fake_status(true)]
@@ -58,6 +60,7 @@ end
 
 RSpec.describe "Ctree::Rebase main branch skip logic" do
   def stub_run_up_to(target, source, branch:, ancestor:)
+    allow(Ctree::Git).to receive(:detect_default_branch).and_return("master")
     allow(Ctree::Sh).to receive(:capture3) do |*cmd|
       case [cmd[0], cmd[3], cmd[4]]
       when ["git", "rev-parse", "--show-toplevel"]  then [target.to_s, "", fake_status(true)]
@@ -128,6 +131,7 @@ RSpec.describe "Ctree::Rebase uncommitted-changes prompt and --force" do
   end
 
   def stub_dirty_worktree
+    allow(Ctree::Git).to receive(:detect_default_branch).and_return("master")
     allow(Ctree::Sh).to receive(:capture3) do |*cmd|
       case [cmd[0], cmd[3], cmd[4]]
       when ["git", "rev-parse", "--show-toplevel"]  then [@target.to_s, "", fake_status(true)]
@@ -163,6 +167,57 @@ RSpec.describe "Ctree::Rebase uncommitted-changes prompt and --force" do
       .and_return(["", "", fake_status(true)])
     expect { Ctree::Rebase.run }
       .to output(/rebased CTR-001 onto master/).to_stdout
+  end
+end
+
+RSpec.describe "Ctree::Rebase with main branch" do
+  around do |ex|
+    Dir.mktmpdir do |tmp|
+      @source = Pathname.new(tmp).realpath
+      Dir.mkdir((@source / "worktree").to_s)
+      @target = (@source / "worktree").realpath
+      Dir.chdir(@target.to_s) { ex.run }
+    end
+  end
+
+  def stub_run_up_to_main(target, source)
+    allow(Ctree::Git).to receive(:detect_default_branch).and_return("main")
+    allow(Ctree::Sh).to receive(:capture3) do |*cmd|
+      case [cmd[0], cmd[3], cmd[4]]
+      when ["git", "rev-parse", "--show-toplevel"]  then [target.to_s, "", fake_status(true)]
+      when ["git", "rev-parse", "--git-common-dir"] then ["../.git", "", fake_status(true)]
+      when ["git", "rev-parse", "--abbrev-ref"]     then ["CTR-001", "", fake_status(true)]
+      when ["git", "status", "--porcelain"]         then ["", "", fake_status(true)]
+      else raise "unexpected: #{cmd.inspect}"
+      end
+    end
+    allow(Ctree::Config).to receive(:load).and_return(Ctree::Config.defaults)
+    allow(Ctree::Rebase).to receive(:embedded_repos).and_return([])
+    allow(Ctree::Rebase).to receive(:exit)
+  end
+
+  it "rebases onto main and reports it" do
+    stub_run_up_to_main(@target, @source)
+    allow(Ctree::Sh).to receive(:capture3)
+      .with("git", "-C", @target.to_s, "merge-base", "--is-ancestor", "main", "HEAD")
+      .and_return(["", "", fake_status(false)])
+    allow(Ctree::Sh).to receive(:capture3)
+      .with("git", "-C", @target.to_s, "rebase", "main")
+      .and_return(["", "", fake_status(true)])
+    expect { Ctree::Rebase.run }.to output(/rebased CTR-001 onto main/).to_stdout
+  end
+
+  it "fetches main in embedded repos" do
+    stub_run_up_to_main(@target, @source)
+    allow(Ctree::Sh).to receive(:capture3)
+      .with("git", "-C", @target.to_s, "merge-base", "--is-ancestor", "main", "HEAD")
+      .and_return(["", "", fake_status(true)])
+    allow(Ctree::Sh).to receive(:capture3)
+      .with("git", "-C", "/fake/wt", "fetch", "/fake/src", "main")
+      .and_return(["", "", fake_status(true)])
+    allow(Ctree::Rebase).to receive(:embedded_repos).and_return([Pathname("/fake/wt")])
+    allow(Ctree::Rebase).to receive(:exit)
+    Ctree::Rebase.run
   end
 end
 

@@ -73,7 +73,7 @@ module Ctree
 
       src_branch_out, _, _ = Sh.capture3("git", "-C", source_root.to_s, "rev-parse", "--abbrev-ref", "HEAD")
       src_branch = src_branch_out.strip
-      default_branch = detect_default_branch(source_root)
+      default_branch = Git.detect_default_branch(source_root)
       if !src_branch.empty? && src_branch != default_branch
         Log.warn_ "source repo is on branch '#{src_branch}' (not '#{default_branch}')"
         unless Prompt.confirm("proceed with update? [y/N]:", default: :no, force: force)
@@ -345,16 +345,6 @@ module Ctree
       end
 
       exit(failed ? 2 : 0)
-    end
-
-    def detect_default_branch(root)
-      ref_out, _, ref_st = Sh.capture3("git", "-C", root.to_s,
-                                       "symbolic-ref", "refs/remotes/origin/HEAD")
-      return ref_out.strip.sub("refs/remotes/origin/", "") if ref_st.success?
-
-      _, _, m_st = Sh.capture3("git", "-C", root.to_s,
-                               "show-ref", "--verify", "--quiet", "refs/heads/master")
-      m_st.success? ? "master" : "main"
     end
   end
 end

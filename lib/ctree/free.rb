@@ -60,7 +60,8 @@ module Ctree
       end
       Log.info "checked out #{branch}"
 
-      Rebase.rebase_branch_onto_master(target_path, branch)
+      default_branch = Git.detect_default_branch(source_root)
+      Rebase.rebase_branch_onto_default(target_path, branch, default_branch)
     end
 
     def first_available_branch(all_free, occupied)

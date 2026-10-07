@@ -68,6 +68,7 @@ RSpec.describe Ctree::Free do
     # Stubs all git calls. checkout calls fall through to the else clause
     # (returning success) so have_received can assert them after.
     def stub_run(branches_output: "", porcelain: "")
+      allow(Ctree::Git).to receive(:detect_default_branch).and_return("master")
       allow(Ctree::Config).to receive(:load).and_return(
         Ctree::Config.defaults.merge(free_branch_prefix: "FREE-")
       )

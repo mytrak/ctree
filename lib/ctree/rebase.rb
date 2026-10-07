@@ -65,9 +65,11 @@ module Ctree
 
       results = []
 
-      # === rebase worktree feature branch onto source master ===
+      default_branch = Git.detect_default_branch(source_root)
 
-      status = rebase_branch_onto_master(target_path, current_branch)
+      # === rebase worktree feature branch onto source's default branch ===
+
+      status = rebase_branch_onto_default(target_path, current_branch, default_branch)
       results << [status, target_path.basename.to_s, status == :skipped ? "already up to date" : ""]
 
       # === rebase each embedded repo from its source counterpart ===
@@ -83,7 +85,7 @@ module Ctree
         end
 
         _, f_err, f_st = Spinner.with_spinner("fetching #{rel}") do
-          Sh.capture3("git", "-C", wt_repo.to_s, "fetch", src_repo.to_s, "master")
+          Sh.capture3("git", "-C", wt_repo.to_s, "fetch", src_repo.to_s, default_branch)
         end
         unless f_st.success?
           Log.warn_ "git fetch #{src_repo} failed for #{rel}: #{f_err.strip}"
@@ -159,21 +161,21 @@ module Ctree
       exit(failed ? 2 : 0)
     end
 
-    # Rebases current_branch (checked out at target_path) onto local master.
-    # Returns :skipped if already up to date, :ok if rebased. Dies (and aborts
-    # the rebase) on conflict.
-    def rebase_branch_onto_master(target_path, current_branch)
-      _, _, ancestor_st = Sh.capture3("git", "-C", target_path.to_s, "merge-base", "--is-ancestor", "master", "HEAD")
+    # Rebases current_branch (checked out at target_path) onto the
+    # source's default branch. Returns :skipped if already up to date,
+    # :ok if rebased. Dies (and aborts the rebase) on conflict.
+    def rebase_branch_onto_default(target_path, current_branch, default_branch)
+      _, _, ancestor_st = Sh.capture3("git", "-C", target_path.to_s, "merge-base", "--is-ancestor", default_branch, "HEAD")
       if ancestor_st.success?
-        Log.info "#{current_branch} already up to date with master"
+        Log.info "#{current_branch} already up to date with #{default_branch}"
         return :skipped
       end
 
-      _, err, st = Spinner.with_spinner("rebasing #{current_branch} onto master") do
-        Sh.capture3("git", "-C", target_path.to_s, "rebase", "master")
+      _, err, st = Spinner.with_spinner("rebasing #{current_branch} onto #{default_branch}") do
+        Sh.capture3("git", "-C", target_path.to_s, "rebase", default_branch)
       end
       if st.success?
-        Log.info "rebased #{current_branch} onto master"
+        Log.info "rebased #{current_branch} onto #{default_branch}"
         :ok
       else
         Sh.capture3("git", "-C", target_path.to_s, "rebase", "--abort")
