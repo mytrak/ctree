@@ -37,10 +37,6 @@ module Ctree
       [target_path.realpath, source_root]
     end
 
-    def missing_keys(src_env, tgt_env, skip_keys)
-      src_env.keys - tgt_env.keys - skip_keys
-    end
-
     def ctree_managed_keys(config)
       keys = ["COMPOSE_PROJECT_NAME"]
       host_name_key = config[:host_name].to_s.strip
@@ -121,7 +117,7 @@ module Ctree
       exit 0
     end
 
-    private_class_method :resolve_worktree!, :missing_keys, :ctree_managed_keys,
+    private_class_method :resolve_worktree!, :ctree_managed_keys,
                          :cmd_list, :cmd_check, :cmd_fix
   end
 end

@@ -131,7 +131,7 @@ module Ctree
       failed = results.any? { |st, _, _| st == :failed }
       if !failed && config[:post_rebase_hooks].any?
         post_rebase_hooks = config[:post_rebase_hooks]
-        post_rebase_hooks.each_with_index do |cmd, idx|
+        post_rebase_hooks.each do |cmd|
           out = nil
           if LogFile.enabled?
             # Console output is already suppressed under --log-file,

@@ -80,7 +80,7 @@ module Ctree
       end
     end
 
-    def die(msg, code = 1)
+    def die(msg)
       if LogFile.enabled?
         LogFile.write("ERROR: #{msg}")
         Scroller.stop
@@ -90,7 +90,7 @@ module Ctree
       # error output, and the log file already holds the same text
       warn "#{prefix}ERROR: #{msg}"
       $stderr.flush
-      exit code
+      exit 1
     end
 
     # `interactive: true` marks content that exists only to precede a
@@ -417,25 +417,6 @@ module Ctree
       puts "#{Ctree::Log.prefix}#{msg}"
       yield
     end
-
-    def render_progress(current, total, start_time, spinner)
-      return if LogFile.enabled?
-      return unless $stdout.tty?
-      elapsed = (Time.now - start_time).to_i
-      if total && total > 0
-        pct = [(current.to_f / total * 100).round, 100].min
-        bar_width = 24
-        filled = [[bar_width * pct / 100, 1].max, bar_width].min
-        bar = ("=" * filled).ljust(bar_width)
-        msg = format("[%s] (%s) %3d%%  %s/%s  %ds",
-                     bar, spinner, pct,
-                     Sizes.human(current), Sizes.human(total), elapsed)
-      else
-        msg = format("%s  (%s)  %ds", Sizes.human(current), spinner, elapsed)
-      end
-      print "\r\e[K#{msg}"
-      $stdout.flush
-    end
   end
 
   module Prompt
@@ -544,7 +525,7 @@ module Ctree
       Log.info "built ctree-rsync image"
     end
 
-    def copy_with_progress(src_vol, tgt_vol, live: true)
+    def copy_with_progress(src_vol, tgt_vol)
       # The same container that runs cp -a also samples /to size every 1s
       # and emits a PROGRESS line, so we get real byte-level progress
       # without spawning extra docker invocations.
@@ -680,33 +661,6 @@ module Ctree
         end
       end
       tagged
-    end
-
-    # Maps service suffix -> image ID for a project. Source images are matched
-    # by both the compose-project label AND the name prefix (the label excludes
-    # other worktrees' tags that share the prefix). Worktree-tagged images are
-    # matched by name prefix ONLY: `docker tag` copies the image — including the
-    # source's com.docker.compose.project label — so the label cannot identify
-    # them; the <target>-* name is the only discriminator.
-    def ids_by_service(project, by_label:)
-      filters = ["--filter", "reference=#{project}-*"]
-      filters += ["--filter", "label=com.docker.compose.project=#{project}"] if by_label
-      out, _, st = Sh.capture3("docker", "images", "--no-trunc",
-                               "--format", "{{.Repository}}\t{{.ID}}", *filters)
-      return {} unless st.success?
-      out.lines.each_with_object({}) do |line, h|
-        repo, id = line.strip.split("\t", 2)
-        next if repo.nil? || id.nil?
-        h[repo.sub("#{project}-", "")] = id
-      end
-    end
-
-    # Returns service suffixes whose source image ID differs from (or is
-    # missing on) the worktree's tagged image — i.e. a sync would update them.
-    def stale_services(source_project, target_project)
-      source_ids = ids_by_service(source_project, by_label: true)
-      target_ids = ids_by_service(target_project, by_label: false)
-      source_ids.filter_map { |svc, src_id| svc if target_ids[svc] != src_id }
     end
   end
 

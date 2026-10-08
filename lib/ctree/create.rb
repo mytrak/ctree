@@ -542,7 +542,7 @@ module Ctree
 
         # Explicit intent: live progress semantics unchanged with or without
         # --log-file; the log file only receives the past-tense completion line.
-        st, err, vol_bytes = Volume.copy_with_progress(src_vol, tgt_vol, live: true)
+        st, err, vol_bytes = Volume.copy_with_progress(src_vol, tgt_vol)
         if st.success?
           volume_copy_bytes += vol_bytes.to_i
           volume_results << [src_vol, tgt_vol, :copied, ""]
