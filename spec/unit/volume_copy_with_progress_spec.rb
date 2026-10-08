@@ -40,7 +40,7 @@ RSpec.describe Ctree::Volume do
         original_stdout = $stdout
         $stdout = out
         begin
-          Ctree::Volume.copy_with_progress("src_vol", "tgt_vol", live: true)
+          Ctree::Volume.copy_with_progress("src_vol", "tgt_vol")
         ensure
           $stdout = original_stdout
         end
@@ -63,7 +63,7 @@ RSpec.describe Ctree::Volume do
         original_stdout = $stdout
         $stdout = StringIO.new
         begin
-          Ctree::Volume.copy_with_progress("src_vol", "tgt_vol", live: true)
+          Ctree::Volume.copy_with_progress("src_vol", "tgt_vol")
         ensure
           $stdout = original_stdout
         end
@@ -82,7 +82,7 @@ RSpec.describe Ctree::Volume do
       original_stdout = $stdout
       $stdout = out
       begin
-        Ctree::Volume.copy_with_progress("src_vol", "tgt_vol", live: true)
+        Ctree::Volume.copy_with_progress("src_vol", "tgt_vol")
       ensure
         $stdout = original_stdout
       end
@@ -99,7 +99,7 @@ RSpec.describe Ctree::Volume do
         original_stdout = $stdout
         $stdout = out
         begin
-          Ctree::Volume.copy_with_progress("src_vol", "tgt_vol", live: true)
+          Ctree::Volume.copy_with_progress("src_vol", "tgt_vol")
         ensure
           $stdout = original_stdout
         end
@@ -116,7 +116,7 @@ RSpec.describe Ctree::Volume do
       original_stdout = $stdout
       $stdout = out
       begin
-        Ctree::Volume.copy_with_progress("src_vol", "tgt_vol", live: true)
+        Ctree::Volume.copy_with_progress("src_vol", "tgt_vol")
       ensure
         $stdout = original_stdout
       end
