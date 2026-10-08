@@ -34,35 +34,36 @@ module Ctree
 
       Log.die "target path already exists: #{target_path}" if target_path.exist?
 
-      # === verify source is on master branch ===
+      # === verify source is on default branch ===
 
+      default_branch = Git.detect_default_branch(source_root)
       current_branch_out, _, cb_st = Sh.capture3("git", "-C", source_root.to_s, "rev-parse", "--abbrev-ref", "HEAD")
       if cb_st.success?
         current_branch = current_branch_out.strip
-        unless current_branch == "master"
-          Log.warn_ "source repo is on branch '#{current_branch}', not 'master'"
+        unless current_branch == default_branch
+          Log.warn_ "source repo is on branch '#{current_branch}', not '#{default_branch}'"
 
           dirty_out, _, _ = Sh.capture3("git", "-C", source_root.to_s, "status", "--porcelain")
           has_changes = !dirty_out.strip.empty?
 
           if has_changes
-            if Prompt.confirm("stash uncommitted changes and switch to master? [Y/n]:", default: :yes, force: force)
+            if Prompt.confirm("stash uncommitted changes and switch to #{default_branch}? [Y/n]:", default: :yes, force: force)
               _, stash_err, stash_st = Sh.capture3("git", "-C", source_root.to_s, "stash")
               Log.die "git stash failed: #{stash_err.strip}" unless stash_st.success?
               Log.info "stashed uncommitted changes"
-              _, co_err, co_st = Sh.capture3("git", "-C", source_root.to_s, "checkout", "master")
-              Log.die "git checkout master failed: #{co_err.strip}" unless co_st.success?
-              Log.info "switched source to master"
+              _, co_err, co_st = Sh.capture3("git", "-C", source_root.to_s, "checkout", default_branch)
+              Log.die "git checkout #{default_branch} failed: #{co_err.strip}" unless co_st.success?
+              Log.info "switched source to #{default_branch}"
             else
-              Log.die "please checkout master in the source repo and re-run ctree"
+              Log.die "please checkout #{default_branch} in the source repo and re-run ctree"
             end
           else
-            if Prompt.confirm("switch source to master branch? [Y/n]:", default: :yes, force: force)
-              _, co_err, co_st = Sh.capture3("git", "-C", source_root.to_s, "checkout", "master")
-              Log.die "git checkout master failed: #{co_err.strip}" unless co_st.success?
-              Log.info "switched source to master"
+            if Prompt.confirm("switch source to #{default_branch} branch? [Y/n]:", default: :yes, force: force)
+              _, co_err, co_st = Sh.capture3("git", "-C", source_root.to_s, "checkout", default_branch)
+              Log.die "git checkout #{default_branch} failed: #{co_err.strip}" unless co_st.success?
+              Log.info "switched source to #{default_branch}"
             else
-              Log.die "please checkout master in the source repo and re-run ctree"
+              Log.die "please checkout #{default_branch} in the source repo and re-run ctree"
             end
           end
         end
@@ -675,27 +676,28 @@ module Ctree
 
       any_failed = volume_results.any? { |_, _, st, _| st == :failed }
 
-      # === offer to rebase a stale existing branch onto master ===
+      # === offer to rebase a stale existing branch onto default branch ===
       # Worktree runtime state (gem/package volumes and their lockfiles) is
-      # replicated from the source's master. An existing branch that is behind
-      # master can have tracked lockfiles that no longer match the copied state,
-      # which can prevent the stack from booting. Offer to rebase onto master
-      # before the user moves into the worktree.
+      # replicated from the source's default branch. An existing branch that
+      # is behind the default branch can have tracked lockfiles that no
+      # longer match the copied state, which can prevent the stack from
+      # booting. Offer to rebase onto the default branch before the user
+      # moves into the worktree.
       if branch_exists
         behind_out, _, behind_st = Sh.capture3(
-          "git", "-C", target_path.to_s, "rev-list", "--count", "HEAD..master"
+          "git", "-C", target_path.to_s, "rev-list", "--count", "HEAD..#{default_branch}"
         )
         behind = behind_st.success? ? behind_out.strip.to_i : 0
         if behind > 0
-          Log.warn_ "branch '#{branch}' is #{behind} commit(s) behind master"
+          Log.warn_ "branch '#{branch}' is #{behind} commit(s) behind #{default_branch}"
           Log.warn_ "its lockfiles may not match the replicated gem/package"
           Log.warn_ "volumes, which can prevent the stack from booting"
-          if Prompt.confirm("rebase '#{branch}' onto master now? [Y/n]:", default: :yes, force: force)
-            _, _, rb_st = Spinner.with_spinner("rebasing #{branch} onto master") do
-              Sh.capture3("git", "-C", target_path.to_s, "rebase", "master")
+          if Prompt.confirm("rebase '#{branch}' onto #{default_branch} now? [Y/n]:", default: :yes, force: force)
+            _, _, rb_st = Spinner.with_spinner("rebasing #{branch} onto #{default_branch}") do
+              Sh.capture3("git", "-C", target_path.to_s, "rebase", default_branch)
             end
             if rb_st.success?
-              Log.info "rebased #{branch} onto master"
+              Log.info "rebased #{branch} onto #{default_branch}"
             else
               Sh.capture3("git", "-C", target_path.to_s, "rebase", "--abort")
               Log.warn_ "rebase conflict — aborted; resolve manually with `ctree rebase` from the worktree"

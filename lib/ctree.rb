@@ -219,6 +219,25 @@ module Ctree
     private_class_method :render_loop
   end
 
+  # Git helpers shared by all commands.
+  module Git
+    module_function
+
+    # Returns the source repo's default branch name: the branch
+    # refs/remotes/origin/HEAD points at when available, otherwise
+    # "master" if refs/heads/master exists, otherwise "main".
+    # Never returns nil.
+    def detect_default_branch(root)
+      ref_out, _, ref_st = Sh.capture3("git", "-C", root.to_s,
+                                       "symbolic-ref", "refs/remotes/origin/HEAD")
+      return ref_out.strip.sub("refs/remotes/origin/", "") if ref_st.success?
+
+      _, _, m_st = Sh.capture3("git", "-C", root.to_s,
+                               "show-ref", "--verify", "--quiet", "refs/heads/master")
+      m_st.success? ? "master" : "main"
+    end
+  end
+
   # Single seam for shelling out. Integration tests stub these.
   module Sh
     module_function
