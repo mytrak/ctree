@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "fileutils"
+require "find"
 require "json"
 require "open3"
 require "pathname"
@@ -56,10 +57,9 @@ module Ctree
     end
 
     def debug(msg)
-      return unless @debug
       if LogFile.enabled?
         LogFile.write(msg)
-      else
+      elsif @debug
         puts "#{prefix}#{msg}"
       end
     end
@@ -354,6 +354,23 @@ module Ctree
       end
       format("%.1f%s", size, units[i])
     end
+
+    def note(bytes)
+      bytes ? " (#{human(bytes)})" : ""
+    end
+
+    def path_bytes(path)
+      return File.size(path) if File.file?(path)
+
+      total = 0
+      Find.find(path.to_s) do |p|
+        st = File.lstat(p)
+        total += st.size if st.file?
+      rescue Errno::ENOENT
+        next
+      end
+      total
+    end
   end
 
   module Spinner
@@ -600,10 +617,8 @@ module Ctree
         $stdout.flush
       end
 
-      elapsed = (Time.now - start_time).to_i
       if exit_status.success?
-        size_part = total_bytes && total_bytes > 0 ? "#{Sizes.human(total_bytes)} in " : ""
-        completion = "copied #{src_vol} -> #{tgt_vol} (#{size_part}#{elapsed}s)"
+        completion = "copied #{src_vol} -> #{tgt_vol}#{Sizes.note(total_bytes)}"
         # The log file is user-requested output: the completion line is always
         # recorded there, regardless of log_level (which only governs the console).
         LogFile.write(completion) if LogFile.enabled?
@@ -624,15 +639,22 @@ module Ctree
         Sh.capture3(*cmd)
       end
 
-      transferred_bytes = 0
+      total_bytes = nil
       out.each_line do |line|
-        if line =~ /Total transferred file size:\s+([\d,]+)\s+bytes/
-          transferred_bytes = $1.tr(",", "").to_i
+        if line =~ /\ATotal file size:\s+([\d,]+)\s+bytes/
+          total_bytes = $1.tr(",", "").to_i
           break
         end
       end
 
-      [st, err, transferred_bytes]
+      if st.success?
+        line = "updated #{src_vol} -> #{tgt_vol}#{Sizes.note(total_bytes)}"
+        # One destination per run keeps the line single (CTR-055): always in the
+        # log file, or on the console in debug mode when there is no log file.
+        LogFile.enabled? ? LogFile.write(line) : Log.debug(line)
+      end
+
+      [st, err, total_bytes]
     end
   end
 

@@ -47,11 +47,42 @@ RSpec.describe Ctree::Volume do
         expect(out.string).to eq("")
         log_contents = File.read(log_path)
         expect(log_contents).not_to include("copying src_vol -> tgt_vol")
-        expect(log_contents).to match(/copied src_vol -> tgt_vol \(\S+ in \d+s\)/)
+        expect(log_contents).to match(/copied src_vol -> tgt_vol \(100\.0B\)/)
         expect(log_contents.scan("copied src_vol -> tgt_vol").size).to eq(1)
       end
     ensure
       Ctree::LogFile.reset!
+    end
+
+    def copy_log_for(lines)
+      Dir.mktmpdir do |dir|
+        log_path = File.join(dir, "ctree.log")
+        Ctree::LogFile.configure(log_path)
+        stub_popen3(lines: lines)
+
+        original_stdout = $stdout
+        $stdout = StringIO.new
+        begin
+          Ctree::Volume.copy_with_progress("src_vol", "tgt_vol")
+        ensure
+          $stdout = original_stdout
+        end
+        File.read(log_path)
+      end
+    ensure
+      Ctree::LogFile.reset!
+    end
+
+    it "shows 0B when the volume is empty" do
+      log = copy_log_for(["TOTAL:0\n"])
+
+      expect(log).to match(/copied src_vol -> tgt_vol \(0B\)\n/)
+    end
+
+    it "adds no size when the copy script reports no total" do
+      log = copy_log_for([])
+
+      expect(log).to match(/copied src_vol -> tgt_vol\n/)
     end
 
     it "does not duplicate the completion line in the log file when debug mode is on (CTR-055)" do

@@ -340,7 +340,7 @@ RSpec.describe "Ctree::CLI update" do
     Dir.chdir(wt.to_s) do
       expect { Ctree::CLI.run(["update"]) }
         .to raise_error(SystemExit) { |e| expect(e.status).to eq(0) }
-        .and output(/\[skipped\].*src_log.*->.*wt1_log.*\(empty volume\)/).to_stdout
+        .and output(/\[empty  \].*src_log.*->.*wt1_log.*\(empty volume\)/).to_stdout
     end
   ensure
     if defined?(wt) && wt
@@ -376,7 +376,7 @@ RSpec.describe "Ctree::CLI update" do
     Dir.chdir(wt.to_s) do
       expect { Ctree::CLI.run(["update"]) }
         .to raise_error(SystemExit) { |e| expect(e.status).to eq(0) }
-        .and output(/\[skipped\].*src_log.*->.*wt1_log.*\(empty volume\)/).to_stdout
+        .and output(/\[empty  \].*src_log.*->.*wt1_log.*\(empty volume\)/).to_stdout
     end
   ensure
     if defined?(wt) && wt
@@ -665,6 +665,161 @@ RSpec.describe "Ctree::CLI update" do
     $stdout.string
   ensure
     $stdout = original
+  end
+
+  describe "sizes in the log file" do
+    let(:rsync_stats) do
+      "Total file size: 43,433,984 bytes\nTotal transferred file size: 1,024 bytes\n"
+    end
+
+    def update_log_for(config_yaml:, docker_capture3:)
+      FileUtils.mkdir_p((@work / ".ctree").to_s)
+      File.write((@work / ".ctree" / "config.yml").to_s, config_yaml)
+      system("git", "-C", @work.to_s, "add", ".ctree", out: File::NULL, err: File::NULL)
+      system("git", "-C", @work.to_s, "commit", "-q", "--amend", "--no-edit",
+             out: File::NULL, err: File::NULL)
+
+      wt = @parent / "wt_timing"
+      system("git", "-C", @work.to_s, "worktree", "add", "-q", "-b", "wt-timing", wt.to_s,
+             out: File::NULL, err: File::NULL)
+      File.write((wt / ".env").to_s, "COMPOSE_PROJECT_NAME=wt_timing\n")
+
+      stub_sh(docker_system: [true], docker_capture3: docker_capture3)
+
+      Dir.mktmpdir do |log_dir|
+        log_path = File.join(log_dir, "ctree.log")
+        Dir.chdir(wt.to_s) do
+          expect { Ctree::CLI.run(["update", "--log-file=#{log_path}"]) }
+            .to raise_error(SystemExit) { |e| expect(e.status).to eq(0) }
+        end
+        File.read(log_path)
+      end
+    ensure
+      if defined?(wt) && wt
+        system("git", "-C", @work.to_s, "worktree", "remove", "--force", wt.to_s,
+               out: File::NULL, err: File::NULL)
+      end
+    end
+
+    def volume_capture3
+      [
+        ["", "", true],
+        ["", "", true],
+        ["", "", true],
+        ["src_locales\n", "", true],
+        ["", "", true],
+        ["", "", true],
+        [rsync_stats, "", true],
+      ]
+    end
+
+    def no_volume_capture3
+      [["", "", true], ["", "", true], ["", "", true], ["", "", true]]
+    end
+
+    it "logs the size of each updated volume and an aggregate line" do
+      log = update_log_for(config_yaml: "update_volumes:\n  - locales\n", docker_capture3: volume_capture3)
+
+      expect(log).to match(/updated src_locales -> wt_timing_locales \(41\.4MB\)/)
+      expect(log).to match(/updated 1 volume \(41\.4MB\)/)
+    end
+
+    it "logs each updated volume exactly once in debug mode and omits the aggregate" do
+      log = update_log_for(
+        config_yaml: "update_volumes:\n  - locales\nlog_level: debug\n",
+        docker_capture3: volume_capture3,
+      )
+
+      expect(log.scan("updated src_locales -> wt_timing_locales").size).to eq(1)
+      expect(log).to match(/updated src_locales -> wt_timing_locales \(41\.4MB\)/)
+      expect(log).not_to match(/updated 1 volume/)
+    end
+
+    def update_console_for(config_yaml:)
+      FileUtils.mkdir_p((@work / ".ctree").to_s)
+      File.write((@work / ".ctree" / "config.yml").to_s, config_yaml)
+      system("git", "-C", @work.to_s, "add", ".ctree", out: File::NULL, err: File::NULL)
+      system("git", "-C", @work.to_s, "commit", "-q", "--amend", "--no-edit",
+             out: File::NULL, err: File::NULL)
+      wt = @parent / "wt_console"
+      system("git", "-C", @work.to_s, "worktree", "add", "-q", "-b", "wt-console", wt.to_s,
+             out: File::NULL, err: File::NULL)
+      File.write((wt / ".env").to_s, "COMPOSE_PROJECT_NAME=wt_console\n")
+      stub_sh(docker_system: [true], docker_capture3: volume_capture3)
+
+      Dir.chdir(wt.to_s) do
+        capture_stdout do
+          expect { Ctree::CLI.run(["update"]) }
+            .to raise_error(SystemExit) { |e| expect(e.status).to eq(0) }
+        end
+      end
+    ensure
+      if defined?(wt) && wt
+        system("git", "-C", @work.to_s, "worktree", "remove", "--force", wt.to_s,
+               out: File::NULL, err: File::NULL)
+      end
+    end
+
+    it "prints the per-volume line with its size on the console in debug mode without a log file" do
+      console = update_console_for(config_yaml: "update_volumes:\n  - locales\nlog_level: debug\n")
+
+      expect(console.scan("updated src_locales -> wt_console_locales").size).to eq(1)
+      expect(console).to match(/updated src_locales -> wt_console_locales \(41\.4MB\)/)
+    end
+
+    it "prints only the aggregate volume line on the console at info level without a log file" do
+      console = update_console_for(config_yaml: "update_volumes:\n  - locales\n")
+
+      expect(console).not_to include("updated src_locales -> wt_console_locales")
+      expect(console).to match(/updated 1 volume \(41\.4MB\)/)
+    end
+
+    it "logs the stack stops without an elapsed time" do
+      log = update_log_for(
+        config_yaml: "log_level: info\n",
+        docker_capture3: [
+          ["abc\n", "", true],
+          ["", "", true],
+          ["def\n", "", true],
+          ["", "", true],
+          ["", "", true],
+          ["", "", true],
+        ],
+      )
+
+      expect(log).to match(/stopped source compose stack$/)
+      expect(log).to match(/stopped worktree compose stack$/)
+    end
+
+    it "logs the combined size of the updated files and directories at info level" do
+      File.write((@work / "sample.lock").to_s, "x" * 2048)
+      FileUtils.mkdir_p((@work / "assets" / "sub").to_s)
+      File.write((@work / "assets" / "a.bin").to_s, "x" * 1024)
+      File.write((@work / "assets" / "sub" / "b.bin").to_s, "x" * 1024)
+
+      log = update_log_for(
+        config_yaml: "update:\n  - sample.lock\n  - assets\n",
+        docker_capture3: no_volume_capture3,
+      )
+
+      expect(log).to match(/updated 2 files \(4\.0KB\)/)
+    end
+
+    it "logs the size of each updated file and directory in debug mode" do
+      File.write((@work / "sample.lock").to_s, "x" * 2048)
+      FileUtils.mkdir_p((@work / "assets" / "sub").to_s)
+      File.write((@work / "assets" / "a.bin").to_s, "x" * 1024)
+      File.write((@work / "assets" / "sub" / "b.bin").to_s, "x" * 1024)
+
+      log = update_log_for(
+        config_yaml: "update:\n  - sample.lock\n  - assets\nlog_level: debug\n",
+        docker_capture3: no_volume_capture3,
+      )
+
+      expect(log).to match(/updated sample\.lock \(2\.0KB\)$/)
+      expect(log).to match(/updated assets\/ \(2\.0KB\)$/)
+      expect(log).not_to match(/updated 2 files/)
+    end
   end
 
   it "does not write update summary block to the log file" do

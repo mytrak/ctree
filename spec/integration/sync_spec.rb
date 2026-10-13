@@ -207,6 +207,7 @@ RSpec.describe "Ctree::CLI sync" do
       expect(log_content).to include("CRITICAL ERROR")
       expect(log_content).to include("some detail")
       expect(log_content).to include("post-rebase hook failed")
+      expect(log_content).not_to include("post-rebase hook completed")
     end
   end
 
