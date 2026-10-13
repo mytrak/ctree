@@ -126,6 +126,7 @@ RSpec.describe "Ctree::CLI create" do
 
       expect(log_output).to include("created worktree wt1")
       expect(log_output).to include("copied source content")
+      expect(log_output).not_to match(/copied source content.*\d+s[,)]/)
       expect(log_output).not_to include("copying source content")
       expect(console_output).not_to include("copied source content")
       expect(console_output).to include("creating worktree wt1")
@@ -569,6 +570,79 @@ RSpec.describe "Ctree::CLI create" do
            out: File::NULL, err: File::NULL)
   end
 
+  it "logs the copied update file with the (create/update) reason" do
+    FileUtils.mkdir_p((@work / ".ctree").to_s)
+    File.write((@work / ".ctree" / "config.yml").to_s, "update:\n  - lockfile.test\nlog_level: debug\n")
+    File.write((@work / "lockfile.test").to_s, "source-version\n")
+    system("git", "-C", @work.to_s, "add", ".ctree", "lockfile.test",
+           out: File::NULL, err: File::NULL)
+    system("git", "-C", @work.to_s, "commit", "-q", "--amend", "--no-edit",
+           out: File::NULL, err: File::NULL)
+
+    system("git", "-C", @work.to_s, "checkout", "-q", "-b", "wt1",
+           out: File::NULL, err: File::NULL)
+    system("git", "-C", @work.to_s, "checkout", "-q", "master",
+           out: File::NULL, err: File::NULL)
+
+    allow(Ctree::Prompt).to receive(:for_env_var_change) { |_key, value| value }
+    allow(Ctree::Prompt).to receive(:read_line).and_return("n")
+    stub_clonefile
+    stub_sh(docker_capture3: docker_stubs)
+
+    Dir.mktmpdir do |log_dir|
+      log_path = File.join(log_dir, "ctree.log")
+
+      expect {
+        Ctree::CLI.run(["create", "wt1", "wt1", "--log-file=#{log_path}"])
+      }.to raise_error(SystemExit) { |e| expect(e.status).to eq(0) }
+
+      log_output = File.read(log_path)
+      expect(log_output).to match(/copied lockfile\.test from source \(create\/update\)$/)
+      expect(log_output).not_to match(/from source \(update\)/)
+    end
+
+    sibling = @work.parent / "wt1"
+    system("git", "-C", @work.to_s, "worktree", "remove", "--force", sibling.to_s,
+           out: File::NULL, err: File::NULL)
+  end
+
+  it "logs the copied update directory with the (create/update) reason" do
+    FileUtils.mkdir_p((@work / ".ctree").to_s)
+    File.write((@work / ".ctree" / "config.yml").to_s, "update:\n  - assets\nlog_level: debug\n")
+    FileUtils.mkdir_p((@work / "assets").to_s)
+    File.write((@work / "assets" / "a.txt").to_s, "source-version\n")
+    system("git", "-C", @work.to_s, "add", ".ctree", "assets",
+           out: File::NULL, err: File::NULL)
+    system("git", "-C", @work.to_s, "commit", "-q", "--amend", "--no-edit",
+           out: File::NULL, err: File::NULL)
+
+    system("git", "-C", @work.to_s, "checkout", "-q", "-b", "wt1",
+           out: File::NULL, err: File::NULL)
+    system("git", "-C", @work.to_s, "checkout", "-q", "master",
+           out: File::NULL, err: File::NULL)
+
+    allow(Ctree::Prompt).to receive(:for_env_var_change) { |_key, value| value }
+    allow(Ctree::Prompt).to receive(:read_line).and_return("n")
+    stub_clonefile
+    stub_sh(docker_capture3: docker_stubs)
+
+    Dir.mktmpdir do |log_dir|
+      log_path = File.join(log_dir, "ctree.log")
+
+      expect {
+        Ctree::CLI.run(["create", "wt1", "wt1", "--log-file=#{log_path}"])
+      }.to raise_error(SystemExit) { |e| expect(e.status).to eq(0) }
+
+      log_output = File.read(log_path)
+      expect(log_output).to match(/copied assets\/ from source \(create\/update\)$/)
+      expect(log_output).not_to match(/from source \(update\)/)
+    end
+
+    sibling = @work.parent / "wt1"
+    system("git", "-C", @work.to_s, "worktree", "remove", "--force", sibling.to_s,
+           out: File::NULL, err: File::NULL)
+  end
+
   it "fails when the target sibling path already exists" do
     sibling = @work.parent / "wt2"
     FileUtils.mkdir_p(sibling.to_s)
@@ -922,6 +996,49 @@ RSpec.describe "Ctree::CLI create" do
         }.to raise_error(SystemExit) { |e| expect(e.status).to eq(0) }
 
         expect(File.read(log_path)).not_to match(/=== create summary ===/)
+      ensure
+        Ctree::LogFile.reset!
+      end
+    end
+
+    it "starts the log file with a creating-worktree line" do
+      allow(Ctree::Prompt).to receive(:for_env_var_change) { |_key, value| value }
+      allow(Ctree::Prompt).to receive(:read_line).and_return("n")
+      stub_clonefile
+      stub_sh(docker_capture3: docker_stubs)
+
+      Dir.mktmpdir do |log_dir|
+        log_path = File.join(log_dir, "ctree.log")
+
+        expect {
+          Ctree::CLI.run(["create", "wt1", "wt1", "--log-file=#{log_path}"])
+        }.to raise_error(SystemExit) { |e| expect(e.status).to eq(0) }
+
+        first_line = File.read(log_path).lines.first
+        expect(first_line).to match(/\A\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\] creating worktree wt1 from src$/)
+      ensure
+        Ctree::LogFile.reset!
+      end
+    end
+
+    it "logs env var writes with a leading verb instead of an action in parentheses" do
+      allow(Ctree::Prompt).to receive(:for_env_var_change) { |_key, value| value }
+      allow(Ctree::Prompt).to receive(:read_line).and_return("n")
+      stub_clonefile
+      stub_sh(docker_capture3: docker_stubs)
+
+      Dir.mktmpdir do |log_dir|
+        log_path = File.join(log_dir, "ctree.log")
+
+        expect {
+          Ctree::CLI.run(["create", "wt1", "wt1", "--log-file=#{log_path}"])
+        }.to raise_error(SystemExit) { |e| expect(e.status).to eq(0) }
+
+        log_output = File.read(log_path)
+        expect(log_output).to match(/updated COMPOSE_PROJECT_NAME=wt1 in .*\.env$/)
+        expect(log_output).to match(/added HOST_NAME=wt1 in .*\.env$/)
+        expect(log_output).to match(/unchanged DB_PORT=5432 in .*\.env$/)
+        expect(log_output).not_to match(/\(replaced\)|\(appended\)|\(kept\)/)
       ensure
         Ctree::LogFile.reset!
       end

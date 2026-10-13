@@ -146,8 +146,10 @@ module Ctree
             end
           end
 
-          next if status.success?
-
+          if status.success?
+            Log.info "post-rebase hook completed: #{cmd}"
+            next
+          end
           detail = out.to_s.strip
           # A failing hook's output is its diagnostic — show it on the
           # console in every mode (also already in the log file under

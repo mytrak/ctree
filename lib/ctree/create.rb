@@ -34,6 +34,8 @@ module Ctree
 
       Log.die "target path already exists: #{target_path}" if target_path.exist?
 
+      Log.info "creating worktree #{name} from #{source_basename}"
+
       # === verify source is on default branch ===
 
       default_branch = Git.detect_default_branch(source_root)
@@ -168,7 +170,6 @@ module Ctree
       done_count = 0
       clone_done = false
       clone_start = Time.now
-      clone_elapsed = 0
       source_size_bytes = nil
 
       # Measure total size of cloned items in parallel so it's ready by the
@@ -218,7 +219,6 @@ module Ctree
         state_mutex.synchronize { done_count += 1 }
       end
 
-      clone_elapsed = (Time.now - clone_start).to_i
       state_mutex.synchronize { clone_done = true }
 
       # Stop the spinner first so the user isn't staring at a frozen 100%
@@ -233,9 +233,12 @@ module Ctree
       # happen since cloning takes much longer), just omit the size.
       du_thread.join(3)
 
-      size_str = source_size_bytes ? "#{Sizes.human(source_size_bytes)} in " : ""
-      excl_note = excluded.any? ? ", #{excluded.size} excluded" : ""
-      Log.info "copied source content (#{size_str}#{clone_elapsed}s#{excl_note})"
+      details = [
+        source_size_bytes && Sizes.human(source_size_bytes),
+        excluded.any? ? "#{excluded.size} excluded" : nil,
+      ].compact
+      note = details.empty? ? "" : " (#{details.join(", ")})"
+      Log.info "copied source content#{note}"
       failed_items.each { |b| Log.warn_ "failed to clone #{b}" }
 
       # Sync the index, restore tracked files, and remove stale untracked files.
@@ -313,10 +316,10 @@ module Ctree
           if src.directory?
             FileUtils.mkdir_p(tgt.to_s)
             FileUtils.cp_r(src.children.map(&:to_s), tgt.to_s)
-            Log.debug "copied #{rel}/ from source (update)"
+            Log.debug "copied #{rel}/ from source (create/update)"
           elsif src.file?
             FileUtils.cp(src.to_s, tgt.to_s)
-            Log.debug "copied #{rel} from source (update)"
+            Log.debug "copied #{rel} from source (create/update)"
           end
         rescue => e
           Log.warn_ "update: failed to copy #{rel}: #{e.message}"
@@ -436,10 +439,10 @@ module Ctree
       # Write identity env vars before compose up so variable interpolation in
       # project-specific override files resolves correctly during volume creation.
       tgt_env_path = target_path / env_filename
-      EnvFile.upsert(tgt_env_path.to_s, "COMPOSE_PROJECT_NAME", target_project)
-      EnvFile.upsert(tgt_env_path.to_s, config[:host_name], name)
+      cpn_action = EnvFile.upsert(tgt_env_path.to_s, "COMPOSE_PROJECT_NAME", target_project)
+      host_action = EnvFile.upsert(tgt_env_path.to_s, config[:host_name], name)
       pre_suffix = config[:host_name_suffix].to_s
-      EnvFile.upsert(tgt_env_path.to_s, "HOST_NAME_SUFFIX", pre_suffix) unless pre_suffix.empty?
+      suffix_action = EnvFile.upsert(tgt_env_path.to_s, "HOST_NAME_SUFFIX", pre_suffix) unless pre_suffix.empty?
 
       override_file = config[:compose_override_file].to_s
       if !override_file.empty? && (target_path / override_file).file?
@@ -513,7 +516,6 @@ module Ctree
       end
       Log.info "created #{empty_count} empty volumes" if empty_count > 0 && !Log.debug?
 
-      volume_copy_start = Time.now
       volume_copy_bytes = 0
       source_volumes.each do |src_vol|
         suffix = src_vol.sub(prefix_re, "")
@@ -554,9 +556,7 @@ module Ctree
 
       copied_count = volume_results.count { |_, _, st, _| st == :copied }
       if copied_count > 0
-        volume_copy_elapsed = (Time.now - volume_copy_start).to_i
-        size_note = volume_copy_bytes > 0 ? "#{Sizes.human(volume_copy_bytes)} in " : ""
-        Log.info "copied #{copied_count} volumes (#{size_note}#{volume_copy_elapsed}s)" unless Log.debug?
+        Log.info "copied #{copied_count} volumes#{Sizes.note(volume_copy_bytes)}" unless Log.debug?
       end
 
       # === update .env in the new worktree ===
@@ -579,21 +579,17 @@ module Ctree
                   (host_domain_env_key.empty? ? [] : [host_domain_env_key]) +
                   effective_skip_keys).freeze
 
-      cpn_action = EnvFile.upsert(tgt_env_path.to_s, "COMPOSE_PROJECT_NAME", target_project)
-      Log.debug "COMPOSE_PROJECT_NAME=#{target_project} (#{cpn_action}) in #{tgt_env_path}"
-
-      host_action = EnvFile.upsert(tgt_env_path.to_s, host_env_key, name)
-      Log.debug "#{host_env_key}=#{name} (#{host_action}) in #{tgt_env_path}"
+      Log.debug "#{env_action(cpn_action)} COMPOSE_PROJECT_NAME=#{target_project} in #{tgt_env_path}"
+      Log.debug "#{env_action(host_action)} #{host_env_key}=#{name} in #{tgt_env_path}"
 
       unless suffix.empty?
-        suffix_action = EnvFile.upsert(tgt_env_path.to_s, "HOST_NAME_SUFFIX", suffix)
-        Log.debug "HOST_NAME_SUFFIX=#{suffix} (#{suffix_action}) in #{tgt_env_path}"
+        Log.debug "#{env_action(suffix_action)} HOST_NAME_SUFFIX=#{suffix} in #{tgt_env_path}"
       end
 
       unless host_domain_env_key.empty? || suffix.empty?
         domain_val = "#{name}.#{suffix}"
         domain_action = EnvFile.upsert(tgt_env_path.to_s, host_domain_env_key, domain_val)
-        Log.debug "#{host_domain_env_key}=#{domain_val} (#{domain_action}) in #{tgt_env_path}"
+        Log.debug "#{env_action(domain_action)} #{host_domain_env_key}=#{domain_val} in #{tgt_env_path}"
       end
 
       final_env_vars = { host_env_key => name }
@@ -629,9 +625,9 @@ module Ctree
 
           if new_value != value
             action = EnvFile.upsert(tgt_env_path.to_s, key, new_value)
-            Log.debug "#{key}=#{new_value} (#{action}) in #{tgt_env_path}"
+            Log.debug "#{env_action(action)} #{key}=#{new_value} in #{tgt_env_path}"
           else
-            Log.debug "#{key}=#{value} (kept) in #{tgt_env_path}"
+            Log.debug "unchanged #{key}=#{value} in #{tgt_env_path}"
           end
         end
       end
@@ -709,6 +705,10 @@ module Ctree
       end
 
       exit(any_failed ? 2 : 0)
+    end
+
+    def env_action(action)
+      action == :replaced ? "updated" : "added"
     end
   end
 end

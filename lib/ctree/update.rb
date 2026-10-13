@@ -159,8 +159,8 @@ module Ctree
       end
 
       to_sync = []
+      sync_results = []
       to_skip_buckets = {
-        "empty volume" => [],
         "not in sync allowlist" => [],
         "shared from source" => [],
         "no target volume" => []
@@ -171,7 +171,7 @@ module Ctree
         tgt_vol = "#{target_project}_#{suffix}"
 
         if empty_volumes.include?(suffix)
-          to_skip_buckets["empty volume"] << [src_vol, tgt_vol]
+          sync_results << [src_vol, tgt_vol, :empty, "empty volume"]
           next
         end
 
@@ -196,15 +196,12 @@ module Ctree
 
       Volume.ensure_rsync_image! if to_sync.any?
 
-      sync_results = []
-      volume_start = Time.now
       volume_bytes = 0
       updated_vol_count = 0
 
       to_sync.each do |src_vol, tgt_vol|
         st, err, bytes = Volume.rsync_with_progress(src_vol, tgt_vol)
         if st.success?
-          Log.debug "updated #{src_vol} -> #{tgt_vol}"
           volume_bytes += bytes.to_i
           updated_vol_count += 1
           sync_results << [src_vol, tgt_vol, :updated, ""]
@@ -214,7 +211,7 @@ module Ctree
         end
       end
 
-      ["empty volume", "not in sync allowlist", "shared from source", "no target volume"].each do |reason|
+      ["not in sync allowlist", "shared from source", "no target volume"].each do |reason|
         to_skip_buckets[reason].each do |src_vol, tgt_vol|
           Log.debug "skipped #{src_vol} (#{reason})"
           sync_results << [src_vol, tgt_vol, :skipped, reason]
@@ -222,13 +219,12 @@ module Ctree
       end
 
       if updated_vol_count > 0
-        volume_elapsed = (Time.now - volume_start).to_i
-        size_note = volume_bytes > 0 ? "#{Sizes.human(volume_bytes)} in " : ""
-        Log.info "updated #{updated_vol_count} volume#{updated_vol_count == 1 ? "" : "s"} (#{size_note}#{volume_elapsed}s)" unless Log.debug?
+        Log.info "updated #{updated_vol_count} volume#{updated_vol_count == 1 ? "" : "s"}#{Sizes.note(volume_bytes)}" unless Log.debug?
       end
 
       sync_file_results = []
       updated_file_count = 0
+      file_bytes = 0
       config[:update].each do |rel|
         if !override_rel.empty? && rel == override_rel
           Log.debug "skipped #{rel} (compose override file managed by ctree create)"
@@ -248,7 +244,9 @@ module Ctree
             Sh.capture3("rsync", "-a", "--checksum", "--delete", "#{src}/", "#{tgt}/")
           end
           if st.success?
-            Log.debug "updated directory #{rel}"
+            bytes = Sizes.path_bytes(src)
+            Log.debug "updated #{rel}/#{Sizes.note(bytes)}"
+            file_bytes += bytes
             updated_file_count += 1
             sync_file_results << [rel, :updated, ""]
           else
@@ -260,7 +258,9 @@ module Ctree
             Sh.capture3("rsync", "-a", "--checksum", src.to_s, tgt.to_s)
           end
           if st.success?
-            Log.debug "updated file #{rel}"
+            bytes = Sizes.path_bytes(src)
+            Log.debug "updated #{rel}#{Sizes.note(bytes)}"
+            file_bytes += bytes
             updated_file_count += 1
             sync_file_results << [rel, :updated, ""]
           else
@@ -272,7 +272,9 @@ module Ctree
           sync_file_results << [rel, :missing, "source not found"]
         end
       end
-      Log.info "updated #{updated_file_count} file#{updated_file_count == 1 ? "" : "s"}" if updated_file_count > 0 && !Log.debug?
+      if updated_file_count > 0 && !Log.debug?
+        Log.info "updated #{updated_file_count} file#{updated_file_count == 1 ? "" : "s"}#{Sizes.note(file_bytes)}"
+      end
 
       failed = sync_results.any? { |_, _, st, _| st == :failed } ||
                sync_file_results.any? { |_, st, _| st == :failed }
@@ -298,7 +300,9 @@ module Ctree
 
           detail = out.to_s.strip
           Log.info detail unless detail.empty?
-          next if status.success?
+          if status.success?
+            next
+          end
 
           # A failing hook's output is its diagnostic — show it on the
           # console in every mode (also already in the log file under
