@@ -7,8 +7,23 @@ each other's state.
 
 ## Install
 
-Clone this repository, then add its `bin` directory to your `PATH` so
-the `ctree` binary is available in every terminal:
+### From RubyGems (recommended)
+
+```bash
+gem install ctree
+```
+
+This places the `ctree` binary on your `PATH` automatically. Verify:
+
+```bash
+ctree list            # sanity-check that the binary runs
+```
+
+### From source
+
+If you want to use the latest unreleased code, clone the repository
+and add its `bin` directory to your `PATH` so the `ctree` binary
+is available in every terminal:
 
 ```bash
 cd your_repositories_directory
@@ -50,7 +65,7 @@ line is correct.
 ## Usage
 
 Most commands run from the source repository.
-`update`, `rebase`, `free`, `env`, and `compose-config` run from inside
+`update`, `rebase`, `sync`, `free`, `env`, and `compose-config` run from inside
 a worktree.
 
 ```bash
@@ -65,6 +80,7 @@ ctree version
 ctree domain [list | [add | delete] <tld>]
 ctree config [list | add | delete]
 ctree compose-config [list | check | fix]
+ctree sync
 ctree help <command>
 ```
 
@@ -113,6 +129,7 @@ commits you want to keep, push, or re-check-out in a fresh worktree
 later, and ctree can't tell from the branch itself whether that's the
 case.
 
+### list
 
 Lists all worktrees for the current source repo. Each entry shows the
 worktree path and its checked-out branch.
@@ -162,6 +179,14 @@ does not copy them.
 Before doing anything, ctree warns and asks for confirmation (default **no**)
 if the source is on a non-default branch.
 
+### sync
+
+Run **from inside a worktree** (no arguments). Convenience wrapper that runs
+`rebase` and then `update` in sequence, so a single command brings the
+worktree fully up to date with the source. All operations are local — no
+network calls. Update the source repo first, then run `ctree sync` from the
+worktree to catch it up.
+
 ### free
 
 Run **from inside a worktree** (no arguments). Resets the worktree to a free
@@ -190,7 +215,6 @@ ctree env list    # print current worktree .env
 ctree env check   # report discrepancies
 ctree env fix     # resolve discrepancies interactively
 ```
-
 
 Prints all `KEY=VALUE` pairs from the worktree `.env`. No comparison
 with the source is performed.

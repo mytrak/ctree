@@ -2,6 +2,10 @@ GEM
   remote: https://rubygems.org/
   specs:
     diff-lcs (1.6.2)
+    fiddle (1.1.8)
+    io-console (0.9.4)
+    reline (0.7.0)
+      io-console (~> 0.5)
     rspec (3.13.2)
       rspec-core (~> 3.13.0)
       rspec-expectations (~> 3.13.0)
@@ -21,6 +25,8 @@ PLATFORMS
   ruby
 
 DEPENDENCIES
+  fiddle
+  reline
   rspec (~> 3.12)
 
 BUNDLED WITH
