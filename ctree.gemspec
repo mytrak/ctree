@@ -19,20 +19,15 @@ Gem::Specification.new do |spec|
 
   spec.metadata["github_repo"] = "https://github.com/mytrak/ctree"
   spec.metadata["changelog_uri"] = "https://github.com/mytrak/ctree/blob/main/CHANGELOG.md"
+  spec.metadata["source_code_uri"] = "https://github.com/mytrak/ctree"
+  spec.metadata["rubygems_mfa_required"] = "true"
 
-  spec.files = Dir[
-    "lib/**/*.rb",
-    "lib/**/*.yml",
-    "bin/*",
-    "README.md",
-    "LICENSE",
-    "CHANGELOG.md"
-  ]
+  # Package exactly what is committed, not whatever is in the working tree
+  # at build time. Requires a git checkout (README's from-source install clones).
+  spec.files = `git ls-files lib bin README.md LICENSE CHANGELOG.md`.split("\n")
   spec.bindir        = "bin"
   spec.executables   = ["ctree"]
   spec.require_paths = ["lib"]
 
   spec.add_development_dependency "rspec", "~> 3.12"
-  spec.add_dependency "reline"
-  spec.add_dependency "fiddle"
 end
