@@ -40,7 +40,7 @@ RSpec.describe "ctree.gemspec" do
 
   it "excludes build artifacts, docs, and repo-only files from the package" do
     expect(spec.files.select { |f| f =~ /\.gem\z|\Adocs\// }).to be_empty
-    expect(spec.files).not_to include("Gemfile", "Gemfile.lock")
+    expect(spec.files).not_to include("Rakefile", "Gemfile", "Gemfile.lock")
   end
 
   it "matches the newest released version in the changelog" do
