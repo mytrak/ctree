@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    ctree (0.5.3)
+    ctree (0.5.4)
 
 GEM
   remote: https://rubygems.org/
